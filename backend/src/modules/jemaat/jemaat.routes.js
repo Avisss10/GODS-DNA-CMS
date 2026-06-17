@@ -1,0 +1,13 @@
+const express = require('express');
+const controller = require('./jemaat.controller');
+const { authenticate } = require('../../middlewares/auth.middleware');
+
+const router = express.Router();
+
+router.post('/jemaat', authenticate, controller.create);
+router.get('/jemaat/:id', authenticate, controller.getById);
+router.get('/jemaat/:id/sensitive/:field', authenticate, controller.getSensitiveField);
+router.put('/jemaat/:id', authenticate, controller.update);
+router.delete('/jemaat/:id', authenticate, controller.remove);
+
+module.exports = router;

@@ -2,12 +2,36 @@ const { getPool } = require('../../config/database');
 const { encrypt, decrypt, encryptJson, decryptJson } = require('../../utils/encryption.util');
 
 const SENSITIVE_FIELDS = ['no_hp', 'alamat', 'media_sosial'];
+const DATE_ONLY_COLUMNS = ['tgl_lahir', 'tgl_bergabung', 'new_member_until'];
 
 /**
- * Menghitung jarak Levenshtein sederhana antara dua string,
- * dipakai untuk deteksi duplikat nama secara fuzzy (BAGIAN 2.1
- * langkah 2a) tanpa bergantung ekstensi database khusus.
+ * Mengonversi kolom bertipe DATE (yang dikembalikan mysql2 sebagai
+ * Date object dalam local midnight) menjadi string YYYY-MM-DD murni
+ * menggunakan komponen LOKAL (bukan toISOString/JSON serialize, yang
+ * mengonversi ke UTC dan bisa menggeser tanggal mundur satu hari
+ * untuk timezone positif seperti WIB/UTC+7).
+ *
+ * Tanpa normalisasi ini, setiap kali row dikembalikan ke caller
+ * (service, controller, lalu di-serialize jadi JSON oleh Express),
+ * nilai tanggal bisa bergeser — menyebabkan perbandingan tanggal
+ * (misal deteksi duplikat) gagal secara halus dan sulit dilacak.
  */
+function normalizeDateFields(row) {
+  if (!row) return row;
+
+  const normalized = { ...row };
+  for (const column of DATE_ONLY_COLUMNS) {
+    const value = normalized[column];
+    if (value instanceof Date) {
+      const year = value.getFullYear();
+      const month = String(value.getMonth() + 1).padStart(2, '0');
+      const day = String(value.getDate()).padStart(2, '0');
+      normalized[column] = `${year}-${month}-${day}`;
+    }
+  }
+  return normalized;
+}
+
 function levenshteinDistance(a, b) {
   const matrix = Array.from({ length: a.length + 1 }, (_, i) =>
     Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
@@ -26,24 +50,11 @@ function levenshteinDistance(a, b) {
   return matrix[a.length][b.length];
 }
 
-/**
- * Menentukan apakah dua nama "mirip" — threshold sederhana:
- * jarak Levenshtein <= 2 (case-insensitive), cukup untuk menangkap
- * typo umum tanpa membuat banyak false-positive.
- */
 function isSimilarName(nameA, nameB) {
   const distance = levenshteinDistance(nameA.toLowerCase(), nameB.toLowerCase());
   return distance <= 2;
 }
 
-/**
- * Membuat jemaat baru. Field sensitif (no_hp, alamat, media_sosial)
- * dienkripsi sebelum INSERT (BAGIAN 2.1 langkah 3). is_new_member
- * dan new_member_until otomatis di-set (BAGIAN 2.1 langkah 4).
- *
- * @param {object} data - field plaintext jemaat
- * @returns {Promise<number>} id jemaat baru
- */
 async function create(data) {
   const pool = getPool();
 
@@ -85,34 +96,15 @@ async function create(data) {
   return result.insertId;
 }
 
-/**
- * Mencari jemaat by id. Mengembalikan data MENTAH (ciphertext + IV
- * untuk field sensitif, tidak didekripsi) — sesuai BAGIAN 2.5:
- * default tampil ●●●●●●, dekripsi hanya on-demand via
- * findByIdDecrypted().
- *
- * @param {number} id
- * @returns {Promise<object|null>}
- */
 async function findById(id) {
   const pool = getPool();
   const [rows] = await pool.query(
     'SELECT * FROM jemaat WHERE id = :id AND deleted_at IS NULL LIMIT 1',
     { id }
   );
-  return rows[0] || null;
+  return normalizeDateFields(rows[0]) || null;
 }
 
-/**
- * Sama seperti findById, tapi field sensitif didekripsi menjadi
- * plaintext. Dipakai khusus saat user klik "Tampilkan" (BAGIAN 2.5)
- * — pemanggilan fungsi ini SEHARUSNYA selalu diiringi audit_log
- * aksi=VIEW_SENSITIVE oleh service layer (BAGIAN 2.5), bukan oleh
- * repository ini.
- *
- * @param {number} id
- * @returns {Promise<object|null>}
- */
 async function findByIdDecrypted(id) {
   const row = await findById(id);
   if (!row) return null;
@@ -128,14 +120,6 @@ async function findByIdDecrypted(id) {
   };
 }
 
-/**
- * Memperbarui data jemaat. Jika field sensitif diubah (ada di
- * `updates`), generate IV baru dan enkripsi ulang (BAGIAN 2.3:
- * "IV baru setiap kali field sensitif diedit").
- *
- * @param {number} id
- * @param {object} updates - field yang ingin diubah (plaintext untuk field sensitif)
- */
 async function update(id, updates) {
   const pool = getPool();
   const setClauses = [];
@@ -187,14 +171,6 @@ async function update(id, updates) {
   );
 }
 
-/**
- * Soft delete jemaat (BAGIAN 2.4 langkah 4): set deleted_at = NOW(),
- * is_active = false. Pengecekan dependensi (langkah 1-2) dilakukan
- * TERPISAH oleh checkDependencies() — dipanggil service layer
- * SEBELUM memanggil fungsi ini.
- *
- * @param {number} id
- */
 async function softDelete(id) {
   const pool = getPool();
   await pool.query(
@@ -203,16 +179,6 @@ async function softDelete(id) {
   );
 }
 
-/**
- * Mencari kandidat duplikat berdasarkan nama+tgl_lahir mirip
- * (BAGIAN 2.1 langkah 2a). Strategi: filter exact tgl_lahir dulu
- * (mengurangi kandidat signifikan), lalu fuzzy match nama di
- * application layer.
- *
- * @param {string} nama
- * @param {string} tglLahir format YYYY-MM-DD
- * @returns {Promise<Array<{id: number, nama: string}>>}
- */
 async function findDuplicateCandidatesByNameAndBirthdate(nama, tglLahir) {
   const pool = getPool();
   const [rows] = await pool.query(
@@ -223,20 +189,6 @@ async function findDuplicateCandidatesByNameAndBirthdate(nama, tglLahir) {
   return rows.filter((row) => isSimilarName(row.nama, nama));
 }
 
-/**
- * Mencari kandidat duplikat berdasarkan no_hp yang sama (BAGIAN 2.1
- * langkah 2b). Karena no_hp dienkripsi dengan IV acak per baris,
- * ciphertext tidak bisa di-WHERE langsung — harus dekripsi SEMUA
- * baris dengan no_hp terisi, lalu bandingkan plaintext.
- *
- * Catatan performa: untuk skala 1 gereja (ratusan-ribuan jemaat),
- * ini cukup efisien. Jika skala jauh lebih besar di masa depan,
- * pendekatan lain (misal HMAC deterministik tambahan untuk index)
- * bisa dipertimbangkan — di luar scope dokumen saat ini.
- *
- * @param {string} noHpPlaintext
- * @returns {Promise<Array<{id: number, nama: string}>>}
- */
 async function findDuplicateCandidatesByPhone(noHpPlaintext) {
   const pool = getPool();
   const [rows] = await pool.query(
@@ -252,23 +204,13 @@ async function findDuplicateCandidatesByPhone(noHpPlaintext) {
         matches.push({ id: row.id, nama: row.nama });
       }
     } catch (err) {
-      // Skip baris yang gagal didekripsi (data korup/IV tidak cocok) —
-      // tidak menggagalkan keseluruhan pengecekan duplikat.
+      // Skip baris yang gagal didekripsi (data korup/IV tidak cocok)
     }
   }
 
   return matches;
 }
 
-/**
- * Mengecek dependensi aktif sebelum soft delete (BAGIAN 2.4):
- * a. leader CG aktif
- * b. terjadwal volunteer di event mendatang
- * c. masih anggota CG aktif
- *
- * @param {number} jemaatId
- * @returns {Promise<{ isLeaderOfActiveCg: Array, scheduledAsVolunteer: Array, activeMemberOfCg: Array }>}
- */
 async function checkDependencies(jemaatId) {
   const pool = getPool();
 
@@ -314,4 +256,5 @@ module.exports = {
   checkDependencies,
   isSimilarName,
   levenshteinDistance,
+  normalizeDateFields,
 };
