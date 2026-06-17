@@ -9,7 +9,8 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "migrate": "node src/database/migrate-cli.js",
-    "migrate:reset": "node src/database/migrate-cli.js --reset"
+    "migrate:reset": "node src/database/migrate-cli.js --reset",
+    "seed:users": "node src/database/seeds/seed-users.js"
   },
   "keywords": [],
   "author": "",
