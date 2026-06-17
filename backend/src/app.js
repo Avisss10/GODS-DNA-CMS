@@ -3,6 +3,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 
 const healthRoutes = require('./modules/health/health.routes');
+const authRoutes = require('./modules/auth/auth.routes');
 
 const app = express();
 
@@ -11,5 +12,6 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.use('/', healthRoutes);
+app.use('/api', authRoutes);
 
 module.exports = app;

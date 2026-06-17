@@ -1,5 +1,7 @@
 require('dotenv').config();
+const path = require('path');
 const { getPool, closePool } = require('../../../src/config/database');
+const { runMigrationFile, createConnection } = require('../../../src/database/migration-runner');
 const {
   recordAuditLog,
   findByIdWithVerification,
@@ -12,6 +14,29 @@ const describeIfDb = hasDbConfig ? describe : describe.skip;
 
 describeIfDb('auditlog.repository — Integration Test (TiDB nyata)', () => {
   let createdId;
+
+  beforeAll(async () => {
+    // Pastikan tabel audit_logs (dan tabel lain) tersedia, tidak
+    // peduli apakah migration.integration.test.js sudah berjalan
+    // dan membersihkan tabel sebelumnya (lihat pola yang sama di
+    // auth.repository.integration.test.js, Step 9.3).
+    const pool = getPool();
+    const [rows] = await pool.query(
+      `SELECT TABLE_NAME FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'audit_logs'`,
+      [process.env.DB_NAME]
+    );
+
+    if (rows.length === 0) {
+      const connectionForMigration = await createConnection();
+      const migrationFile = path.join(
+        __dirname,
+        '../../../src/database/migrations/001_initial_schema.sql'
+      );
+      await runMigrationFile(connectionForMigration, migrationFile);
+      await connectionForMigration.end();
+    }
+  }, 30000);
 
   afterAll(async () => {
     if (createdId) {
