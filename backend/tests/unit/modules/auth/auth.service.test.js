@@ -7,11 +7,15 @@ jest.mock('../../../../src/modules/notification/notification.stub');
 
 const authRepository = require('../../../../src/modules/auth/auth.repository');
 const { comparePassword } = require('../../../../src/utils/password.util');
-const { signAccessToken, signRefreshToken } = require('../../../../src/utils/jwt.util');
+const {
+  signAccessToken,
+  signRefreshToken,
+  verifyAccessToken,
+} = require('../../../../src/utils/jwt.util');
 const { getRedisClient } = require('../../../../src/config/redis');
 const { recordAuditLog } = require('../../../../src/modules/auditlog/auditlog.repository');
 const { notifyLeaders } = require('../../../../src/modules/notification/notification.stub');
-const { login, AuthError } = require('../../../../src/modules/auth/auth.service');
+const { login, logout, AuthError } = require('../../../../src/modules/auth/auth.service');
 
 describe('auth.service — login (Unit Test)', () => {
   let mockRedis;
@@ -126,5 +130,59 @@ describe('auth.service — login (Unit Test)', () => {
     expect(mockRedis.set).toHaveBeenCalledWith(
       'blacklist_token:old-access-token-yang-masih-aktif', '1', 'EX', 8 * 60 * 60
     );
+  });
+});
+
+describe('auth.service — logout (Unit Test)', () => {
+  let mockRedis;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockRedis = {
+      set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
+    };
+    getRedisClient.mockReturnValue(mockRedis);
+    recordAuditLog.mockResolvedValue(1);
+  });
+
+  it('harus blacklist token dengan TTL sesuai sisa masa berlaku, dan hapus active_session', async () => {
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+    verifyAccessToken.mockReturnValue({ userId: 5, peran: 'ADMIN', exp: nowInSeconds + 1000 });
+
+    await logout('some-valid-token');
+
+    expect(mockRedis.set).toHaveBeenCalledWith(
+      'blacklist_token:some-valid-token', '1', 'EX', expect.any(Number)
+    );
+    const ttlUsed = mockRedis.set.mock.calls[0][3];
+    expect(ttlUsed).toBeGreaterThan(900);
+    expect(ttlUsed).toBeLessThanOrEqual(1000);
+
+    expect(mockRedis.del).toHaveBeenCalledWith('active_session:5');
+  });
+
+  it('harus mencatat audit_log aksi=LOGOUT dengan userId dari token', async () => {
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+    verifyAccessToken.mockReturnValue({ userId: 9, peran: 'LEADER', exp: nowInSeconds + 500 });
+
+    await logout('token-leader');
+
+    expect(recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 9, aksi: 'LOGOUT', modul: 'AUTH' })
+    );
+  });
+
+  it('harus tetap berhasil logout (tidak throw) walau token sudah tidak valid/expired', async () => {
+    verifyAccessToken.mockImplementation(() => {
+      throw new Error('jwt expired');
+    });
+
+    await expect(logout('token-kadaluwarsa')).resolves.not.toThrow();
+
+    expect(mockRedis.set).toHaveBeenCalledWith(
+      'blacklist_token:token-kadaluwarsa', '1', 'EX', 8 * 60 * 60
+    );
+    expect(mockRedis.del).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-const { login: loginService, AuthError } = require('./auth.service');
+const { login: loginService, logout: logoutService, AuthError } = require('./auth.service');
 
 const ACCESS_TOKEN_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 jam
 const REFRESH_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 hari
@@ -35,4 +35,26 @@ async function login(req, res) {
   }
 }
 
-module.exports = { login };
+async function logout(req, res) {
+  const token = req.cookies?.access_token;
+
+  if (!token) {
+    return res.status(401).json({ message: 'Tidak ada sesi aktif' });
+  }
+
+  try {
+    await logoutService(token);
+
+    // Langkah 3: clear cookie
+    res.clearCookie('access_token');
+    res.clearCookie('refresh_token');
+
+    // Langkah 5: return 200
+    return res.status(200).json({ message: 'Logout berhasil' });
+  } catch (err) {
+    console.error('Logout error:', err);
+    return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+}
+
+module.exports = { login, logout };

@@ -1,6 +1,6 @@
 const { getRedisClient } = require('../../config/redis');
 const { comparePassword } = require('../../utils/password.util');
-const { signAccessToken, signRefreshToken } = require('../../utils/jwt.util');
+const { signAccessToken, signRefreshToken, verifyAccessToken } = require('../../utils/jwt.util');
 const authRepository = require('./auth.repository');
 const { recordAuditLog } = require('../auditlog/auditlog.repository');
 const { notifyLeaders } = require('../notification/notification.stub');
@@ -123,10 +123,58 @@ async function login({ username, password }) {
   };
 }
 
+/**
+ * Proses logout sesuai BAGIAN 1.2 (5 langkah):
+ * 1. Ambil token dari cookie (dilakukan controller, token diteruskan ke sini)
+ * 2. Masukkan token ke blacklist redis (TTL = sisa masa berlaku)
+ * 3. Clear cookie (dilakukan controller)
+ * 4. Catat audit_log aksi=LOGOUT
+ * 5. Return 200 (dilakukan controller)
+ *
+ * @param {string} accessToken
+ * @returns {Promise<void>}
+ */
+async function logout(accessToken) {
+  const redis = getRedisClient();
+
+  let userId = null;
+  let remainingTtlSeconds = 8 * 60 * 60; // fallback: durasi penuh access token
+
+  try {
+    const decoded = verifyAccessToken(accessToken);
+    userId = decoded.userId;
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+    remainingTtlSeconds = Math.max(decoded.exp - nowInSeconds, 1);
+  } catch (err) {
+    // Token sudah tidak valid/expired — tetap lanjutkan proses logout
+    // (blacklist tetap di-set dengan TTL fallback, cookie tetap di-clear
+    // oleh controller) supaya logout tidak pernah gagal hanya karena
+    // token sudah usang.
+  }
+
+  // Langkah 2: masukkan token ke blacklist redis
+  await redis.set(tokenBlacklistKey(accessToken), '1', 'EX', remainingTtlSeconds);
+
+  // Hapus juga active_session agar pengecekan single-session (langkah 8 login) bersih
+  if (userId) {
+    await redis.del(activeSessionKey(userId));
+  }
+
+  // Langkah 4: catat audit_log aksi=LOGOUT
+  await recordAuditLog({
+    userId,
+    aksi: 'LOGOUT',
+    modul: 'AUTH',
+    objectId: userId,
+    dataSebelum: null,
+    dataSesudah: null,
+  });
+}
+
 module.exports = {
   AuthError,
   login,
-  // di-export untuk keperluan testing/reuse oleh logout (sub-step berikutnya)
+  logout,
   failedLoginKey,
   activeSessionKey,
   refreshTokenKey,
