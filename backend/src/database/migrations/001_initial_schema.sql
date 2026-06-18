@@ -2,10 +2,12 @@
 -- Migration: 001_initial_schema
 -- Deskripsi : Membuat seluruh 15 tabel utama GODS DNA CMS
 -- Sumber    : src/database/schema.sql (Step 6)
+-- Update    : volunteer_members kini memiliki UNIQUE(jemaat_id,
+--             volunteer_type_id) sesuai keputusan arsitektur
+--             modul Volunteer (Step 12.1) — satu jemaat tidak
+--             boleh terdaftar dua kali untuk jenis volunteer yang
+--             sama.
 -- ============================================================
-
--- (isi persis sama dengan src/database/schema.sql)
--- Lihat Step 6 untuk konten lengkap 15 CREATE TABLE.
 
 -- ------------------------------------------------------------
 -- 1. users
@@ -185,6 +187,7 @@ CREATE TABLE volunteer_members (
         FOREIGN KEY (volunteer_type_id) REFERENCES volunteer_jenis(id)
         ON DELETE RESTRICT ON UPDATE CASCADE,
 
+    UNIQUE KEY uq_vm_jemaat_volunteer_type (jemaat_id, volunteer_type_id),
     INDEX idx_vm_jemaat_id (jemaat_id),
     INDEX idx_vm_volunteer_type_id (volunteer_type_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -338,8 +341,8 @@ CREATE TABLE audit_logs (
 -- CATATAN: Privilege REVOKE untuk audit_logs append-only
 -- (BAGIAN 8.3) memerlukan user DB dengan privilege GRANT,
 -- berbeda konteks dari DDL CREATE TABLE di atas.
--- Akan diimplementasikan di Step 7 - Migration sebagai
--- script provisioning terpisah.
+-- Diimplementasikan sebagai script provisioning terpisah
+-- (lihat src/database/migration-runner.js — enforceAuditLogAppendOnly).
 --
 -- REVOKE UPDATE, DELETE ON gods_dna_cms.audit_logs FROM 'app_user'@'%';
 -- ============================================================
