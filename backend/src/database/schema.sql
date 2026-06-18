@@ -183,6 +183,7 @@ CREATE TABLE volunteer_members (
         FOREIGN KEY (volunteer_type_id) REFERENCES volunteer_jenis(id)
         ON DELETE RESTRICT ON UPDATE CASCADE,
 
+    UNIQUE KEY uq_vm_jemaat_volunteer_type (jemaat_id, volunteer_type_id),
     INDEX idx_vm_jemaat_id (jemaat_id),
     INDEX idx_vm_volunteer_type_id (volunteer_type_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
