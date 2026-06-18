@@ -1,0 +1,142 @@
+const { getPool } = require('../../config/database');
+
+/**
+ * Membuat meeting baru untuk sebuah CG (BAGIAN 3.3 langkah 3).
+ * Precondition (leader aktif) divalidasi di service layer, BUKAN
+ * di sini — repository hanya bertanggung jawab atas persistensi.
+ *
+ * @param {{ cgId: number, judul: string, jenis: 'ONLINE'|'OFFLINE', waktuMulai: string, waktuSelesai: string, catatan?: string, createdBy: number }} data
+ * @returns {Promise<number>} id meeting baru
+ */
+async function createMeeting({ cgId, judul, jenis, waktuMulai, waktuSelesai, catatan = null, createdBy }) {
+  const pool = getPool();
+  const [result] = await pool.query(
+    `INSERT INTO cg_meeting (cg_id, judul, jenis, waktu_mulai, waktu_selesai, catatan, created_by)
+     VALUES (:cgId, :judul, :jenis, :waktuMulai, :waktuSelesai, :catatan, :createdBy)`,
+    { cgId, judul, jenis, waktuMulai, waktuSelesai, catatan, createdBy }
+  );
+  return result.insertId;
+}
+
+/**
+ * Mencari meeting by id.
+ * @param {number} id
+ * @returns {Promise<object|null>}
+ */
+async function findMeetingById(id) {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    'SELECT * FROM cg_meeting WHERE id = :id LIMIT 1',
+    { id }
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Menambahkan satu foto dokumentasi meeting (BAGIAN 3.3 langkah 2).
+ * file_path dan file_size_kb diasumsikan sudah final (sudah
+ * dikompresi oleh service layer/upload handler sebelum dipanggil).
+ *
+ * @param {{ meetingId: number, filePath: string, fileSizeKb: number, uploadedBy: number }} data
+ * @returns {Promise<number>} id foto baru
+ */
+async function addMeetingPhoto({ meetingId, filePath, fileSizeKb, uploadedBy }) {
+  const pool = getPool();
+  const [result] = await pool.query(
+    `INSERT INTO cg_meeting_photos (meeting_id, file_path, file_size_kb, uploaded_by)
+     VALUES (:meetingId, :filePath, :fileSizeKb, :uploadedBy)`,
+    { meetingId, filePath, fileSizeKb, uploadedBy }
+  );
+  return result.insertId;
+}
+
+/**
+ * Menghitung jumlah foto yang sudah ada untuk sebuah meeting —
+ * dipakai service layer untuk validasi maks 10 foto (BAGIAN 3.3)
+ * SEBELUM memanggil addMeetingPhoto().
+ *
+ * @param {number} meetingId
+ * @returns {Promise<number>}
+ */
+async function countMeetingPhotos(meetingId) {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    'SELECT COUNT(*) AS total FROM cg_meeting_photos WHERE meeting_id = :meetingId',
+    { meetingId }
+  );
+  return Number(rows[0].total);
+}
+
+/**
+ * Mengambil anggota CG yang aktif PADA SAAT meeting berlangsung
+ * (BAGIAN 3.4 langkah 1, dikutip persis):
+ * "left_at IS NULL ATAU left_at > waktu meeting"
+ *
+ * Ini berbeda dari findActiveMembers() di cellgroup.repository.js
+ * (yang hanya cek status aktif SAAT INI) — fungsi ini
+ * mempertimbangkan histori, supaya anggota yang keluar SETELAH
+ * meeting tetap muncul di form absensi meeting tersebut.
+ *
+ * @param {number} cgId
+ * @param {string} waktuMeeting - datetime string
+ * @returns {Promise<Array<object>>}
+ */
+async function findActiveMembersAtMeetingTime(cgId, waktuMeeting) {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    `SELECT j.id, j.nama
+     FROM cell_group_members cgm
+     JOIN jemaat j ON cgm.jemaat_id = j.id
+     WHERE cgm.cg_id = :cgId
+       AND (cgm.left_at IS NULL OR cgm.left_at > :waktuMeeting)
+       AND j.deleted_at IS NULL`,
+    { cgId, waktuMeeting }
+  );
+  return rows;
+}
+
+/**
+ * UPSERT absensi per jemaat per meeting (BAGIAN 3.4 langkah 3).
+ * Memanfaatkan UNIQUE constraint (meeting_id, jemaat_id) yang
+ * sudah ada di schema Step 6.
+ *
+ * @param {number} meetingId
+ * @param {number} jemaatId
+ * @param {boolean} hadir
+ */
+async function upsertAbsensi(meetingId, jemaatId, hadir) {
+  const pool = getPool();
+  await pool.query(
+    `INSERT INTO cg_absensi (meeting_id, jemaat_id, hadir)
+     VALUES (:meetingId, :jemaatId, :hadir)
+     ON DUPLICATE KEY UPDATE hadir = :hadir`,
+    { meetingId, jemaatId, hadir }
+  );
+}
+
+/**
+ * Mengambil seluruh data absensi untuk satu meeting.
+ * @param {number} meetingId
+ * @returns {Promise<Array<object>>}
+ */
+async function findAbsensiByMeeting(meetingId) {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    `SELECT ca.jemaat_id, j.nama, ca.hadir
+     FROM cg_absensi ca
+     JOIN jemaat j ON ca.jemaat_id = j.id
+     WHERE ca.meeting_id = :meetingId`,
+    { meetingId }
+  );
+  return rows;
+}
+
+module.exports = {
+  createMeeting,
+  findMeetingById,
+  addMeetingPhoto,
+  countMeetingPhotos,
+  findActiveMembersAtMeetingTime,
+  upsertAbsensi,
+  findAbsensiByMeeting,
+};
