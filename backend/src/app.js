@@ -6,6 +6,7 @@ const healthRoutes = require('./modules/health/health.routes');
 const authRoutes = require('./modules/auth/auth.routes');
 const jemaatRoutes = require('./modules/jemaat/jemaat.routes');
 const cellGroupRoutes = require('./modules/cellgroup/cellgroup.routes');
+const volunteerRoutes = require('./modules/volunteer/volunteer.routes');
 
 const app = express();
 
@@ -17,5 +18,6 @@ app.use('/', healthRoutes);
 app.use('/api', authRoutes);
 app.use('/api', jemaatRoutes);
 app.use('/api', cellGroupRoutes);
+app.use('/api', volunteerRoutes);
 
 module.exports = app;

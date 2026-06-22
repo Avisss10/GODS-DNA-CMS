@@ -139,7 +139,8 @@ describe('volunteer.service — unregisterVolunteer (Unit Test)', () => {
   });
 
   it('harus berhasil menonaktifkan dan mencatat audit log UNREGISTER_VOLUNTEER', async () => {
-    volunteerMemberRepository.findByJemaatAndType.mockResolvedValue({ id: 5 });
+    // Tambah is_active: true agar lolos validasi baru
+    volunteerMemberRepository.findByJemaatAndType.mockResolvedValue({ id: 5, is_active: true });
 
     await unregisterVolunteer(1, 1, { actorUserId: 9 });
 
@@ -147,5 +148,29 @@ describe('volunteer.service — unregisterVolunteer (Unit Test)', () => {
     expect(recordAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({ aksi: 'UNREGISTER_VOLUNTEER', modul: 'VOLUNTEER' })
     );
+  });
+});
+
+// ── listVolunteerByJemaat ─────────────────────────────────────────
+const { listVolunteerByJemaat } = require('../../../../src/modules/volunteer/volunteer.service');
+
+describe('volunteer.service — listVolunteerByJemaat (Unit Test)', () => {
+  it('harus 404 jika jemaat tidak ditemukan (atau soft-deleted)', async () => {
+    jemaatRepository.findById.mockResolvedValue(null);
+
+    await expect(listVolunteerByJemaat(1)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('harus mengembalikan array jenis volunteer aktif milik jemaat', async () => {
+    jemaatRepository.findById.mockResolvedValue({ id: 1, nama: 'Budi', is_active: true });
+    volunteerMemberRepository.findActiveByJemaat.mockResolvedValue([
+      { id: 10, volunteer_type_id: 3, nama: 'Usher', joined_at: '2024-01-01' },
+    ]);
+
+    const result = await listVolunteerByJemaat(1);
+
+    expect(Array.isArray(result)).toBe(true);
+    expect(result[0]).toHaveProperty('volunteer_type_id', 3);
+    expect(volunteerMemberRepository.findActiveByJemaat).toHaveBeenCalledWith(1);
   });
 });

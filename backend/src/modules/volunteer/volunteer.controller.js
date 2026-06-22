@@ -1,0 +1,100 @@
+const volunteerService = require('./volunteer.service');
+const { VolunteerError } = volunteerService;
+
+function handleError(err, res) {
+  if (err instanceof VolunteerError) {
+    return res.status(err.statusCode).json({ message: err.message });
+  }
+  console.error('Volunteer controller error:', err);
+  return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+}
+
+// POST /api/volunteer-types
+async function createVolunteerType(req, res) {
+  try {
+    const actorUserId = req.user?.userId ?? null;
+    const result = await volunteerService.createVolunteerType(req.body, { actorUserId });
+    return res.status(201).json(result);
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+// PUT /api/volunteer-types/:id
+async function updateVolunteerType(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const actorUserId = req.user?.userId ?? null;
+    const result = await volunteerService.updateVolunteerType(id, req.body, { actorUserId });
+    return res.status(200).json(result);
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+// DELETE /api/volunteer-types/:id
+async function deleteVolunteerType(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const actorUserId = req.user?.userId ?? null;
+    await volunteerService.deactivateVolunteerType(id, { actorUserId });
+    return res.status(200).json({ message: 'Jenis volunteer berhasil dinonaktifkan' });
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+// GET /api/jemaat/:jemaatId/volunteer
+async function listVolunteerByJemaat(req, res) {
+  try {
+    const jemaatId = Number(req.params.jemaatId);
+    const result = await volunteerService.listVolunteerByJemaat(jemaatId);
+    return res.status(200).json(result);
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+// POST /api/jemaat/:jemaatId/volunteer
+async function registerVolunteer(req, res) {
+  try {
+    const jemaatId = Number(req.params.jemaatId);
+    const actorUserId = req.user?.userId ?? null;
+    const { volunteerTypeId } = req.body;
+
+    if (!volunteerTypeId) {
+      return res.status(400).json({ message: 'volunteerTypeId wajib diisi' });
+    }
+
+    const result = await volunteerService.registerVolunteer(
+      jemaatId,
+      Number(volunteerTypeId),
+      { actorUserId }
+    );
+    return res.status(201).json(result);
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+// DELETE /api/jemaat/:jemaatId/volunteer/:volunteerTypeId
+async function unregisterVolunteer(req, res) {
+  try {
+    const jemaatId = Number(req.params.jemaatId);
+    const volunteerTypeId = Number(req.params.volunteerTypeId);
+    const actorUserId = req.user?.userId ?? null;
+    await volunteerService.unregisterVolunteer(jemaatId, volunteerTypeId, { actorUserId });
+    return res.status(200).json({ message: 'Jemaat berhasil dikeluarkan dari jenis volunteer' });
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+module.exports = {
+  createVolunteerType,
+  updateVolunteerType,
+  deleteVolunteerType,
+  listVolunteerByJemaat,
+  registerVolunteer,
+  unregisterVolunteer,
+};
