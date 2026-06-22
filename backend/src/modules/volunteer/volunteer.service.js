@@ -154,8 +154,13 @@ async function registerVolunteer(jemaatId, volunteerTypeId, { actorUserId = null
  * @param {number} options.actorUserId
  */
 async function unregisterVolunteer(jemaatId, volunteerTypeId, { actorUserId = null } = {}) {
-  const existingRegistration = await volunteerMemberRepository.findByJemaatAndType(jemaatId, volunteerTypeId);
-  if (!existingRegistration) {
+  const existingRegistration = await volunteerMemberRepository.findByJemaatAndType(
+    jemaatId,
+    volunteerTypeId
+  );
+
+  // Tidak ditemukan ATAU sudah dinonaktifkan → 404
+  if (!existingRegistration || !existingRegistration.is_active) {
     throw new VolunteerError('Pendaftaran volunteer tidak ditemukan', 404);
   }
 
@@ -171,11 +176,27 @@ async function unregisterVolunteer(jemaatId, volunteerTypeId, { actorUserId = nu
   });
 }
 
+/**
+ * Mengambil daftar jenis volunteer aktif milik seorang jemaat.
+ * Jemaat soft-deleted → findById return null → throw 404.
+ *
+ * @param {number} jemaatId
+ * @returns {Promise<Array<object>>}
+ */
+async function listVolunteerByJemaat(jemaatId) {
+  const jemaat = await jemaatRepository.findById(jemaatId);
+  if (!jemaat) {
+    throw new VolunteerError('Jemaat tidak ditemukan', 404);
+  }
+  return volunteerMemberRepository.findActiveByJemaat(jemaatId);
+}
+
 module.exports = {
   VolunteerError,
   createVolunteerType,
   updateVolunteerType,
   deactivateVolunteerType,
+  listVolunteerByJemaat,
   registerVolunteer,
   unregisterVolunteer,
 };
