@@ -61,12 +61,13 @@ async function runMigrationFile(connection, filePath) {
 }
 
 /**
- * Drop seluruh 15 tabel jika ada, dalam urutan KEBALIKAN dari pembuatan
+ * Drop seluruh 16 tabel jika ada, dalam urutan KEBALIKAN dari pembuatan
  * (child table dulu, baru parent) agar tidak melanggar FK constraint.
  * Dipakai untuk reset state sebelum integration test.
  */
 async function dropAllTables(connection) {
   const dropOrder = [
+    'notifications',
     'audit_logs',
     'event_kehadiran',
     'event_attendances',

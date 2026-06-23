@@ -1,18 +1,12 @@
 -- ============================================================
 -- Migration: 001_initial_schema
--- Deskripsi : Membuat seluruh 15 tabel utama GODS DNA CMS
--- Sumber    : src/database/schema.sql (Step 6)
--- Update    : volunteer_members kini memiliki UNIQUE(jemaat_id,
---             volunteer_type_id) sesuai keputusan arsitektur
---             modul Volunteer (Step 12.1) — satu jemaat tidak
---             boleh terdaftar dua kali untuk jenis volunteer yang
---             sama.
+-- Deskripsi : Membuat seluruh tabel utama GODS DNA CMS
 -- ============================================================
 
 -- ------------------------------------------------------------
 -- 1. users
 -- ------------------------------------------------------------
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     username        VARCHAR(50)  NOT NULL UNIQUE,
     password_hash   VARCHAR(255) NOT NULL,
@@ -25,7 +19,7 @@ CREATE TABLE users (
 -- ------------------------------------------------------------
 -- 2. jemaat
 -- ------------------------------------------------------------
-CREATE TABLE jemaat (
+CREATE TABLE IF NOT EXISTS jemaat (
     id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     nama                VARCHAR(100) NOT NULL,
     tgl_lahir           DATE NOT NULL,
@@ -58,7 +52,7 @@ CREATE TABLE jemaat (
 -- ------------------------------------------------------------
 -- 3. cell_group
 -- ------------------------------------------------------------
-CREATE TABLE cell_group (
+CREATE TABLE IF NOT EXISTS  cell_group (
     id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     nama        VARCHAR(100) NOT NULL,
     deskripsi   TEXT NULL,
@@ -77,7 +71,7 @@ CREATE TABLE cell_group (
 -- ------------------------------------------------------------
 -- 4. cell_group_members
 -- ------------------------------------------------------------
-CREATE TABLE cell_group_members (
+CREATE TABLE IF NOT EXISTS  cell_group_members (
     id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     cg_id       INT UNSIGNED NOT NULL,
     jemaat_id   INT UNSIGNED NOT NULL,
@@ -98,7 +92,7 @@ CREATE TABLE cell_group_members (
 -- ------------------------------------------------------------
 -- 5. cg_meeting
 -- ------------------------------------------------------------
-CREATE TABLE cg_meeting (
+CREATE TABLE IF NOT EXISTS  cg_meeting (
     id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     cg_id           INT UNSIGNED NOT NULL,
     judul           VARCHAR(150) NOT NULL,
@@ -122,7 +116,7 @@ CREATE TABLE cg_meeting (
 -- ------------------------------------------------------------
 -- 6. cg_meeting_photos
 -- ------------------------------------------------------------
-CREATE TABLE cg_meeting_photos (
+CREATE TABLE IF NOT EXISTS  cg_meeting_photos (
     id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     meeting_id      INT UNSIGNED NOT NULL,
     file_path       VARCHAR(255) NOT NULL,
@@ -143,7 +137,7 @@ CREATE TABLE cg_meeting_photos (
 -- ------------------------------------------------------------
 -- 7. cg_absensi
 -- ------------------------------------------------------------
-CREATE TABLE cg_absensi (
+CREATE TABLE IF NOT EXISTS  cg_absensi (
     id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     meeting_id  INT UNSIGNED NOT NULL,
     jemaat_id   INT UNSIGNED NOT NULL,
@@ -163,7 +157,7 @@ CREATE TABLE cg_absensi (
 -- ------------------------------------------------------------
 -- 8. volunteer_jenis
 -- ------------------------------------------------------------
-CREATE TABLE volunteer_jenis (
+CREATE TABLE IF NOT EXISTS  volunteer_jenis (
     id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     nama        VARCHAR(100) NOT NULL UNIQUE,
     deskripsi   TEXT NULL,
@@ -173,7 +167,7 @@ CREATE TABLE volunteer_jenis (
 -- ------------------------------------------------------------
 -- 9. volunteer_members
 -- ------------------------------------------------------------
-CREATE TABLE volunteer_members (
+CREATE TABLE IF NOT EXISTS  volunteer_members (
     id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     jemaat_id           INT UNSIGNED NOT NULL,
     volunteer_type_id   INT UNSIGNED NOT NULL,
@@ -195,7 +189,7 @@ CREATE TABLE volunteer_members (
 -- ------------------------------------------------------------
 -- 10. event
 -- ------------------------------------------------------------
-CREATE TABLE event (
+CREATE TABLE IF NOT EXISTS  event (
     id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     judul           VARCHAR(150) NOT NULL,
     jenis           VARCHAR(50) NOT NULL,
@@ -222,7 +216,7 @@ CREATE TABLE event (
 -- ------------------------------------------------------------
 -- 11. event_volunteer_needs
 -- ------------------------------------------------------------
-CREATE TABLE event_volunteer_needs (
+CREATE TABLE IF NOT EXISTS  event_volunteer_needs (
     id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     event_id            INT UNSIGNED NOT NULL,
     volunteer_type_id   INT UNSIGNED NOT NULL,
@@ -241,7 +235,7 @@ CREATE TABLE event_volunteer_needs (
 -- ------------------------------------------------------------
 -- 12. event_volunteer
 -- ------------------------------------------------------------
-CREATE TABLE event_volunteer (
+CREATE TABLE IF NOT EXISTS  event_volunteer (
     id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     event_id            INT UNSIGNED NOT NULL,
     jemaat_id           INT UNSIGNED NOT NULL,
@@ -273,7 +267,7 @@ CREATE TABLE event_volunteer (
 -- ------------------------------------------------------------
 -- 13. event_attendances
 -- ------------------------------------------------------------
-CREATE TABLE event_attendances (
+CREATE TABLE IF NOT EXISTS  event_attendances (
     id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     event_id    INT UNSIGNED NOT NULL,
     jemaat_id   INT UNSIGNED NOT NULL,
@@ -300,7 +294,7 @@ CREATE TABLE event_attendances (
 -- ------------------------------------------------------------
 -- 14. event_kehadiran
 -- ------------------------------------------------------------
-CREATE TABLE event_kehadiran (
+CREATE TABLE IF NOT EXISTS  event_kehadiran (
     id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     event_id    INT UNSIGNED NOT NULL UNIQUE,
     total_hadir INT UNSIGNED NOT NULL,
@@ -317,7 +311,7 @@ CREATE TABLE event_kehadiran (
 -- ------------------------------------------------------------
 -- 15. audit_logs
 -- ------------------------------------------------------------
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS  audit_logs (
     id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id         INT UNSIGNED NULL,
     aksi            VARCHAR(50) NOT NULL,
@@ -337,12 +331,27 @@ CREATE TABLE audit_logs (
     INDEX idx_audit_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ------------------------------------------------------------
+-- 16. notifications
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS  notifications (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT UNSIGNED NOT NULL,
+    jenis       VARCHAR(100) NOT NULL,
+    judul       VARCHAR(255) NOT NULL,
+    pesan       TEXT NOT NULL,
+    is_read     BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_notif_user
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+
+    INDEX idx_notif_user_read (user_id, is_read)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ============================================================
 -- CATATAN: Privilege REVOKE untuk audit_logs append-only
--- (BAGIAN 8.3) memerlukan user DB dengan privilege GRANT,
--- berbeda konteks dari DDL CREATE TABLE di atas.
--- Diimplementasikan sebagai script provisioning terpisah
--- (lihat src/database/migration-runner.js — enforceAuditLogAppendOnly).
---
+-- (BAGIAN 8.3) memerlukan user DB dengan privilege GRANT.
 -- REVOKE UPDATE, DELETE ON gods_dna_cms.audit_logs FROM 'app_user'@'%';
 -- ============================================================
