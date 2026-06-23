@@ -15,6 +15,7 @@ const upload = multer({
 });
 
 router.post('/cell-groups', authenticate, controller.createCellGroup);
+router.get('/cell-groups', authenticate, controller.listCellGroups);
 router.get('/cell-groups/:id', authenticate, controller.getCellGroupById);
 router.get('/cell-groups/:id/members', authenticate, controller.getActiveMembers);
 router.post('/cell-groups/:id/members', authenticate, controller.addMember);

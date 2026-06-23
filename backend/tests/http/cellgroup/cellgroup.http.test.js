@@ -92,6 +92,31 @@ describeIfReady('Cell Group Endpoints — REST HTTP Test (server aktif)', () => 
     cgId = res.body.id;
   }, 15000);
 
+  describe('GET /api/cell-groups', () => {
+    it('401 tanpa autentikasi', async () => {
+      const res = await request(server).get('/api/cell-groups');
+      expect(res.status).toBe(401);
+    });
+
+    it('200 mengembalikan array cell group aktif', async () => {
+      const res = await request(server)
+        .get('/api/cell-groups')
+        .set('Cookie', cookieHeader);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+    });
+
+    it('200 hasil mengandung field nama dan nama_leader', async () => {
+      const res = await request(server)
+        .get('/api/cell-groups')
+        .set('Cookie', cookieHeader);
+      expect(res.status).toBe(200);
+      if (res.body.length > 0) {
+        expect(res.body[0]).toHaveProperty('nama');
+      }
+    });
+  });
+
   it('GET /api/cell-groups/:id harus mengembalikan detail CG', async () => {
     const res = await request(server)
       .get(`/api/cell-groups/${cgId}`)

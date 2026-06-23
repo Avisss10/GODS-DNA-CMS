@@ -1,4 +1,5 @@
 const jemaatService = require('./jemaat.service');
+const jemaatRepository = require('./jemaat.repository');
 const { JemaatError } = jemaatService;
 
 function handleError(err, res) {
@@ -89,4 +90,15 @@ async function remove(req, res) {
   }
 }
 
-module.exports = { create, getById, getSensitiveField, update, remove };
+async function list(req, res) {
+  try {
+    const { search, limit, offset } = req.query;
+    const result = await jemaatRepository.findAll({ search, limit, offset });
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('Jemaat controller list error:', err);
+    return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+}
+
+module.exports = { create, getById, getSensitiveField, update, remove, list };

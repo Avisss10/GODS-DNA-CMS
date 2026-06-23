@@ -120,6 +120,29 @@ describeIfReady('Jemaat Endpoints — REST HTTP Test (server aktif)', () => {
     expect(res.body.duplicates).toBeDefined();
   }, 15000);
 
+  describe('GET /api/jemaat', () => {
+    it('401 tanpa autentikasi', async () => {
+      const res = await request(server).get('/api/jemaat');
+      expect(res.status).toBe(401);
+    });
+
+    it('200 mengembalikan array jemaat aktif', async () => {
+      const res = await request(server)
+        .get('/api/jemaat')
+        .set('Cookie', cookieHeader);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+    });
+
+    it('200 filter search mengembalikan hasil yang relevan', async () => {
+      const res = await request(server)
+        .get('/api/jemaat?search=Test')
+        .set('Cookie', cookieHeader);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+    });
+  });
+
   it('GET /api/jemaat/:id harus mengembalikan data dengan no_hp dalam bentuk ciphertext', async () => {
     const res = await request(server)
       .get(`/api/jemaat/${createdJemaatId}`)

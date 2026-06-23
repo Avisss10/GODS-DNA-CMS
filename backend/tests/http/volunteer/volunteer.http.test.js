@@ -194,6 +194,30 @@ describeIfReady('Volunteer Endpoints — REST HTTP Test (server aktif)', () => {
     });
   });
 
+  // ── GET /api/volunteer-types ──────────────────────────────────────
+  describe('GET /api/volunteer-types', () => {
+    it('401 tanpa autentikasi', async () => {
+      const res = await request(server).get('/api/volunteer-types');
+      expect(res.status).toBe(401);
+    });
+
+    it('200 mengembalikan array jenis volunteer aktif', async () => {
+      const res = await request(server)
+        .get('/api/volunteer-types')
+        .set('Cookie', cookieAdmin);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+    });
+
+    it('200 hasil hanya berisi jenis yang aktif', async () => {
+      const res = await request(server)
+        .get('/api/volunteer-types')
+        .set('Cookie', cookieAdmin);
+      expect(res.status).toBe(200);
+      res.body.forEach((vt) => expect(Number(vt.is_active)).toBe(1));
+    });
+  });
+
   // ── GET /api/jemaat/:jemaatId/volunteer ───────────────────────
   describe('GET /api/jemaat/:jemaatId/volunteer', () => {
     it('401 tanpa autentikasi', async () => {
