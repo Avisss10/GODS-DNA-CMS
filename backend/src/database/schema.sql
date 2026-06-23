@@ -333,6 +333,25 @@ CREATE TABLE audit_logs (
     INDEX idx_audit_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ------------------------------------------------------------
+-- 16. notifications
+-- ------------------------------------------------------------
+CREATE TABLE notifications (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT UNSIGNED NOT NULL,
+    jenis       VARCHAR(100) NOT NULL,
+    judul       VARCHAR(255) NOT NULL,
+    pesan       TEXT NOT NULL,
+    is_read     BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_notif_user
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+
+    INDEX idx_notif_user_read (user_id, is_read)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ============================================================
 -- CATATAN: Privilege REVOKE untuk audit_logs append-only
 -- (BAGIAN 8.3) memerlukan user DB dengan privilege GRANT,

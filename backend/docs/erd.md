@@ -1,6 +1,6 @@
 # ERD — GODS DNA CMS
 
-Diagram ini merepresentasikan 15 tabel utama sesuai BAGIAN 0 dokumen
+Diagram ini merepresentasikan 16 tabel utama sesuai BAGIAN 0 dokumen
 spesifikasi (ALUR SISTEM LENGKAP — GODS DNA CMS).
 
 Tipe data pada diagram ini bersifat konseptual (int, varchar, text, date,
@@ -169,12 +169,23 @@ erDiagram
         datetime created_at
     }
 
+    NOTIFICATIONS {
+        int id PK
+        int user_id FK
+        varchar jenis
+        varchar judul
+        text pesan
+        boolean is_read
+        datetime created_at
+    }
+
     %% Relasi USERS
     USERS ||--o{ CG_MEETING : "membuat (created_by)"
     USERS ||--o{ CG_MEETING_PHOTOS : "mengunggah (uploaded_by)"
     USERS ||--o{ EVENT : "membuat (created_by)"
     USERS ||--o{ EVENT_ATTENDANCES : "void (voided_by)"
     USERS ||--o{ AUDIT_LOGS : "melakukan aksi (user_id)"
+    USERS ||--o{ NOTIFICATIONS : "menerima (user_id)"
 
     %% Relasi JEMAAT - CELL GROUP
     JEMAAT ||--o{ CELL_GROUP : "memimpin (leader_id)"
@@ -201,7 +212,7 @@ erDiagram
     EVENT ||--o| EVENT_KEHADIRAN : "memiliki rekap kehadiran agregat"
 ```
 
-## Daftar 15 Tabel Utama
+## Daftar 16 Tabel Utama
 
 | No | Tabel | Deskripsi Singkat |
 |----|-------|-------------------|
@@ -220,6 +231,7 @@ erDiagram
 | 13 | `event_attendances` | Catatan volunteer yang bertugas di event |
 | 14 | `event_kehadiran` | Rekap agregat kehadiran event (total_hadir, jemaat_baru) |
 | 15 | `audit_logs` | Log audit append-only dengan HMAC |
+| 16 | `notifications` | Notifikasi in-app untuk LEADER (LOGIN_GAGAL_BERULANG, dll) |
 
 ## Catatan Penamaan
 

@@ -94,11 +94,17 @@ erDiagram
         int user_id FK
     }
 
+    NOTIFICATIONS {
+        int id PK
+        int user_id FK
+    }
+
     USERS ||--o{ CG_MEETING : "created_by"
     USERS ||--o{ CG_MEETING_PHOTOS : "uploaded_by"
     USERS ||--o{ EVENT : "created_by"
     USERS ||--o{ EVENT_ATTENDANCES : "voided_by"
     USERS ||--o{ AUDIT_LOGS : "user_id"
+    USERS ||--o{ NOTIFICATIONS : "user_id"
 
     JEMAAT ||--o{ CELL_GROUP : "leader_id"
     CELL_GROUP ||--o{ CELL_GROUP_MEMBERS : "cg_id"
@@ -122,11 +128,11 @@ erDiagram
     EVENT ||--o| EVENT_KEHADIRAN : "event_id"
 ```
 
-## Daftar Relasi Foreign Key (23 relasi)
+## Daftar Relasi Foreign Key (24 relasi)
 
 | No | Kolom FK | Referensi | Kardinalitas | Nullable | Keterangan |
 |----|----------|-----------|--------------|----------|------------|
-| 1 | `cell_group.leader_id` | `jemaat.id` | 1 : N | Tidak | Satu jemaat bisa jadi leader CG (riwayat memungkinkan >1) |
+| 1 | `cell_group.leader_id` | `jemaat.id` | 1 : N | Ya | Satu jemaat bisa jadi leader CG; NULL jika CG belum punya leader (ON DELETE SET NULL) |
 | 2 | `cell_group_members.cg_id` | `cell_group.id` | 1 : N | Tidak | Satu CG punya banyak anggota |
 | 3 | `cell_group_members.jemaat_id` | `jemaat.id` | 1 : N | Tidak | Satu jemaat bisa anggota banyak CG (multi-CG, BAGIAN 3.2) |
 | 4 | `cg_meeting.cg_id` | `cell_group.id` | 1 : N | Tidak | Satu CG punya banyak meeting |
@@ -148,7 +154,8 @@ erDiagram
 | 20 | `event_attendances.jemaat_id` | `jemaat.id` | 1 : N | Tidak | Satu jemaat punya banyak riwayat bertugas |
 | 21 | `event_attendances.voided_by` | `users.id` | 1 : N | Ya | NULL jika belum di-void (rule #11, BAGIAN 12) |
 | 22 | `event_kehadiran.event_id` | `event.id` | 1 : 1 | Tidak | UPSERT per event_id (BAGIAN 5.8) → unique constraint |
-| 23 | `audit_logs.user_id` | `users.id` | 1 : N | Tidak | Satu user melakukan banyak aksi |
+| 23 | `audit_logs.user_id` | `users.id` | 1 : N | Ya | NULL jika user sudah dihapus (ON DELETE SET NULL) |
+| 24 | `notifications.user_id` | `users.id` | 1 : N | Tidak | Notifikasi dikirim ke user LEADER tertentu |
 
 ## Tabel Tanpa FK
 
