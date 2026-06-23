@@ -1,24 +1,40 @@
+const notificationService = require('./notification.service');
+
 /**
- * STUB SEMENTARA — Modul Notification lengkap dijadwalkan di Step 17.
- *
- * BAGIAN 10 dokumen mensyaratkan notifikasi in-app ke Leader untuk
- * berbagai event (login gagal berulang, dst), disimpan di tabel
- * `notifications`. Tabel tersebut belum dibuat (di luar 15 tabel
- * Step 6, sesuai urutan kerja: Notification = Step 17).
- *
- * Sampai Step 17 selesai, fungsi ini hanya mencatat ke console.log
- * sebagai jejak bahwa notifikasi SEHARUSNYA terkirim. Tidak ada
- * data yang hilang secara permanen karena setiap pemicu notifikasi
- * (misal rate-limit lockout) tetap tercatat lengkap di audit_logs.
- *
- * TODO (Step 17): ganti implementasi notifyLeaders() agar benar-benar
- * INSERT ke tabel notifications, query semua user peran=LEADER aktif,
- * dan (opsional) kirim email sesuai BAGIAN 10.
- *
- * @param {{ jenis: string, pesan: string, meta?: object }} params
+ * Kirim notifikasi ke semua Leader aktif.
+ * Support dua signature:
+ *   - Lama: notifyLeaders(jenis, pesan, metadata)  ← dari auth.service
+ *   - Baru: notifyLeaders({ jenis, judul, pesan })  ← dari modul lain
  */
-function notifyLeaders({ jenis, pesan, meta = {} }) {
-  console.log(`[STUB NOTIFIKASI LEADER] jenis=${jenis} | ${pesan}`, meta);
+async function notifyLeaders(jenisOrObj, pesan, metadata = {}) {
+  let jenis, pesanFinal;
+
+  if (typeof jenisOrObj === 'object' && jenisOrObj !== null) {
+    jenis = jenisOrObj.jenis;
+    pesanFinal = jenisOrObj.pesan;
+  } else {
+    jenis = jenisOrObj;
+    pesanFinal = pesan;
+  }
+
+  const judulMap = {
+    LOGIN_GAGAL_BERULANG: 'Peringatan: Login Gagal Berulang',
+    LOGIN_IP_BARU: 'Peringatan: Login dari IP Tidak Dikenal',
+    EKSPOR_DATA_MALAM: 'Peringatan: Ekspor Data di Luar Jam Operasional',
+    LEADER_TINGGAL_SATU: 'Peringatan: Jumlah Leader Tinggal 1',
+    EVENT_SELESAI: 'Ringkasan Event Selesai',
+    SCORING_SELESAI: 'Cron Scoring Selesai',
+    AUDIT_TAMPERED: 'PERINGATAN KRITIS: Integritas Audit Log Terancam',
+  };
+
+  const judul = judulMap[jenis] ?? `Notifikasi: ${jenis}`;
+
+  try {
+    await notificationService.notifyLeaders({ jenis, judul, pesan: pesanFinal });
+    console.log(`[NOTIFIKASI LEADER] jenis=${jenis} | ${pesanFinal}`, metadata);
+  } catch (err) {
+    console.error(`[NOTIFIKASI LEADER ERROR] jenis=${jenis}:`, err.message);
+  }
 }
 
 module.exports = { notifyLeaders };

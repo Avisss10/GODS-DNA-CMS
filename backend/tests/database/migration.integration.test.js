@@ -33,7 +33,7 @@ describeIfDb('Migration Runner — Integration Test (TiDB nyata)', () => {
     }
   }, 30000);
 
-  it('harus berhasil menjalankan migration dan membuat 15 tabel', async () => {
+  it('harus berhasil menjalankan migration dan membuat 16 tabel', async () => {
     const migrationFile = path.join(
       __dirname,
       '../../src/database/migrations/001_initial_schema.sql'
@@ -52,7 +52,7 @@ describeIfDb('Migration Runner — Integration Test (TiDB nyata)', () => {
       'audit_logs', 'cell_group', 'cell_group_members', 'cg_absensi',
       'cg_meeting', 'cg_meeting_photos', 'event', 'event_attendances',
       'event_kehadiran', 'event_volunteer', 'event_volunteer_needs',
-      'jemaat', 'users', 'volunteer_jenis', 'volunteer_members',
+      'jemaat', 'users', 'volunteer_jenis', 'volunteer_members', 'notifications',
     ].sort();
 
     expect(tableNames).toEqual(expectedTables);
