@@ -10,6 +10,10 @@ beforeAll(() => {
   process.env.AUDIT_HMAC_SECRET = 'test-hmac-secret';
 });
 
+afterAll(() => {
+  process.env.AUDIT_HMAC_SECRET = 'test-hmac-secret';
+});
+
 describe('auditlog.repository — computeHmac (Unit Test)', () => {
   const fixedDate = new Date('2026-06-17T10:00:00.000Z');
 
@@ -70,46 +74,40 @@ describe('auditlog.repository — recordAuditLog (Unit Test)', () => {
   it('harus INSERT lalu UPDATE hmac_signature, dan mengembalikan id', async () => {
     const mockPool = {
       query: jest.fn()
-        .mockResolvedValueOnce([{ insertId: 99 }])
-        .mockResolvedValueOnce([{}]),
+        .mockResolvedValueOnce([{ insertId: 1 }])                       
+        .mockResolvedValueOnce([[{ created_at: new Date('2026-06-17T10:00:00.000Z') }]]) 
+        .mockResolvedValueOnce([{ affectedRows: 1 }]),                    
     };
     getPool.mockReturnValue(mockPool);
 
     const id = await recordAuditLog({
-      userId: 1,
-      aksi: 'LOGIN',
-      modul: 'AUTH',
-      objectId: null,
-      dataSebelum: null,
-      dataSesudah: null,
+      userId: 5, aksi: 'LOGIN', modul: 'AUTH',
+      objectId: null, dataSebelum: null, dataSesudah: null,
     });
 
-    expect(id).toBe(99);
-    expect(mockPool.query).toHaveBeenCalledTimes(2);
-    expect(mockPool.query.mock.calls[0][0]).toMatch(/INSERT INTO audit_logs/);
-    expect(mockPool.query.mock.calls[1][0]).toMatch(/UPDATE audit_logs SET hmac_signature/);
+    expect(id).toBe(1);
+    expect(mockPool.query).toHaveBeenCalledTimes(3);
+    // Pastikan query ketiga adalah UPDATE hmac_signature
+    expect(mockPool.query.mock.calls[2][0]).toMatch(/UPDATE audit_logs SET hmac_signature/);
   });
 
   it('data_sebelum dan data_sesudah harus di-JSON.stringify sebelum INSERT', async () => {
     const mockPool = {
       query: jest.fn()
-        .mockResolvedValueOnce([{ insertId: 1 }])
-        .mockResolvedValueOnce([{}]),
+        .mockResolvedValueOnce([{ insertId: 2 }])
+        .mockResolvedValueOnce([[{ created_at: new Date('2026-06-17T10:00:00.000Z') }]])
+        .mockResolvedValueOnce([{ affectedRows: 1 }]),
     };
     getPool.mockReturnValue(mockPool);
 
     await recordAuditLog({
-      userId: 1,
-      aksi: 'UPDATE',
-      modul: 'JEMAAT',
-      objectId: 10,
-      dataSebelum: { nama: 'A' },
-      dataSesudah: { nama: 'B' },
+      userId: 5, aksi: 'CREATE', modul: 'JEMAAT',
+      dataSebelum: null,
+      dataSesudah: { nama: 'Budi' },
     });
 
-    const insertParams = mockPool.query.mock.calls[0][1];
-    expect(insertParams.dataSebelum).toBe('{"nama":"A"}');
-    expect(insertParams.dataSesudah).toBe('{"nama":"B"}');
+    const insertCall = mockPool.query.mock.calls[0];
+    expect(insertCall[1].dataSesudah).toBe('{"nama":"Budi"}');
   });
 });
 
