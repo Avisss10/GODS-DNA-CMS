@@ -90,10 +90,23 @@ async function unregisterVolunteer(req, res) {
   }
 }
 
+// GET /api/volunteer-types
+async function listVolunteerTypes(req, res) {
+  try {
+    const volunteerJenisRepository = require('./volunteer-jenis.repository');
+    const result = await volunteerJenisRepository.findAll();
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('Volunteer controller list error:', err);
+    return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+}
+
 module.exports = {
   createVolunteerType,
   updateVolunteerType,
   deleteVolunteerType,
+  listVolunteerTypes,
   listVolunteerByJemaat,
   registerVolunteer,
   unregisterVolunteer,

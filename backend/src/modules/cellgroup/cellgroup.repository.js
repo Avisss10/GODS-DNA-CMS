@@ -134,6 +134,26 @@ async function findActiveMembers(cgId) {
   return rows;
 }
 
+/**
+ * Ambil semua cell group aktif.
+ * @param {{ limit?, offset? }} options
+ * @returns {Promise<Array<object>>}
+ */
+async function findAll({ limit = 50, offset = 0 } = {}) {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    `SELECT cg.id, cg.nama, cg.deskripsi, cg.is_active,
+            cg.created_at, j.nama AS nama_leader
+     FROM cell_group cg
+     LEFT JOIN jemaat j ON cg.leader_id = j.id
+     WHERE cg.is_active = TRUE AND cg.deleted_at IS NULL
+     ORDER BY cg.nama ASC
+     LIMIT :limit OFFSET :offset`,
+    { limit: Number(limit), offset: Number(offset) }
+  );
+  return rows;
+}
+
 module.exports = {
   create,
   findById,
@@ -142,4 +162,5 @@ module.exports = {
   addMember,
   removeMember,
   findActiveMembers,
+  findAll,
 };

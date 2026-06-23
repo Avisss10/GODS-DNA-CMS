@@ -132,8 +132,22 @@ async function submitAbsensi(req, res) {
   }
 }
 
+// GET /api/cell-groups
+async function listCellGroups(req, res) {
+  try {
+    const { limit, offset } = req.query;
+    const cgRepository = require('./cellgroup.repository');
+    const result = await cgRepository.findAll({ limit, offset });
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('CellGroup controller list error:', err);
+    return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+}
+
 module.exports = {
   createCellGroup,
+  listCellGroups,
   getCellGroupById,
   getActiveMembers,
   addMember,

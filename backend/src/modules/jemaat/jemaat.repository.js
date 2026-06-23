@@ -245,9 +245,42 @@ async function checkDependencies(jemaatId) {
   };
 }
 
+async function findAll({ search, limit = 50, offset = 0 } = {}) {
+  const pool = getPool();
+  const params = { limit: Number(limit), offset: Number(offset) };
+
+  if (search) {
+    const [rows] = await pool.query(
+      `SELECT id, nama, tgl_lahir, jenis_kelamin, tgl_bergabung,
+              is_active, is_new_member, skor_keaktifan, status_keaktifan,
+              created_at
+       FROM jemaat
+       WHERE is_active = TRUE AND deleted_at IS NULL
+         AND nama LIKE :search
+       ORDER BY nama ASC
+       LIMIT :limit OFFSET :offset`,
+      { ...params, search: `%${search}%` }
+    );
+    return rows;
+  }
+
+  const [rows] = await pool.query(
+    `SELECT id, nama, tgl_lahir, jenis_kelamin, tgl_bergabung,
+            is_active, is_new_member, skor_keaktifan, status_keaktifan,
+            created_at
+     FROM jemaat
+     WHERE is_active = TRUE AND deleted_at IS NULL
+     ORDER BY nama ASC
+     LIMIT :limit OFFSET :offset`,
+    params
+  );
+  return rows;
+}
+
 module.exports = {
   create,
   findById,
+  findAll,
   findByIdDecrypted,
   update,
   softDelete,

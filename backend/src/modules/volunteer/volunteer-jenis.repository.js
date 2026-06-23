@@ -99,10 +99,26 @@ async function findAllActive() {
   return rows;
 }
 
+/**
+ * Ambil semua jenis volunteer aktif.
+ * @returns {Promise<Array<object>>}
+ */
+async function findAll() {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    `SELECT id, nama, deskripsi, is_active
+     FROM volunteer_jenis
+     WHERE is_active = TRUE
+     ORDER BY nama ASC`
+  );
+  return rows;
+}
+
 module.exports = {
   create,
   findById,
   findByNama,
+  findAll,
   update,
   setActive,
   findAllActive,

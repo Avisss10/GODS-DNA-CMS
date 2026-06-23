@@ -12,6 +12,12 @@ router.post(
   volunteerController.createVolunteerType
 );
 
+router.get(
+  '/volunteer-types', 
+  authenticate, 
+  volunteerController.listVolunteerTypes
+);
+
 router.put(
   '/volunteer-types/:id',
   authenticate,
