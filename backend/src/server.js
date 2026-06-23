@@ -1,6 +1,7 @@
 require('dotenv').config();
 const app = require('./app');
 const { testConnection, closePool } = require('./config/database');
+const { closeRedis } = require('./config/redis');
 
 const PORT = process.env.PORT || 3000;
 
@@ -10,8 +11,7 @@ function startServer(port = PORT) {
 
 /**
  * Fail-fast boot sequence: server tidak akan listen di port jika
- * koneksi database gagal. Ini mencegah server "kelihatan jalan"
- * padahal tidak bisa melayani request apapun yang butuh DB.
+ * koneksi database gagal.
  */
 async function bootstrap() {
   try {
@@ -29,6 +29,7 @@ async function bootstrap() {
     console.log('Shutting down gracefully...');
     server.close(async () => {
       await closePool();
+      await closeRedis();   // ← TAMBAH
       process.exit(0);
     });
   };
