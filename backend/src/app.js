@@ -9,6 +9,7 @@ const cellGroupRoutes = require('./modules/cellgroup/cellgroup.routes');
 const volunteerRoutes = require('./modules/volunteer/volunteer.routes');
 const eventRoutes = require('./modules/event/event.routes');
 const auditlogRoutes = require('./modules/auditlog/auditlog.routes');
+const reportRoutes = require('./modules/report/report.routes');
 
 const app = express();
 
@@ -23,5 +24,6 @@ app.use('/api', cellGroupRoutes);
 app.use('/api', volunteerRoutes);
 app.use('/api', eventRoutes);
 app.use('/api', auditlogRoutes);
+app.use('/api', reportRoutes);
 
 module.exports = app;
