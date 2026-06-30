@@ -143,15 +143,78 @@ async function findAll({ limit = 50, offset = 0 } = {}) {
   const pool = getPool();
   const [rows] = await pool.query(
     `SELECT cg.id, cg.nama, cg.deskripsi, cg.is_active,
-            cg.created_at, j.nama AS nama_leader
+            cg.created_at, j.nama AS nama_leader,
+            COUNT(cgm.id) AS jumlah_anggota
      FROM cell_group cg
      LEFT JOIN jemaat j ON cg.leader_id = j.id
+     LEFT JOIN cell_group_members cgm ON cgm.cg_id = cg.id AND cgm.left_at IS NULL
      WHERE cg.is_active = TRUE AND cg.deleted_at IS NULL
+     GROUP BY cg.id, cg.nama, cg.deskripsi, cg.is_active, cg.created_at, j.nama
      ORDER BY cg.nama ASC
      LIMIT :limit OFFSET :offset`,
     { limit: Number(limit), offset: Number(offset) }
   );
   return rows;
+}
+
+/**
+ * Update data CG. Hanya field yang disertakan dalam `updates` yang diubah.
+ *
+ * @param {number} id
+ * @param {{ nama?, deskripsi?, leader_id? }} updates
+ */
+async function update(id, updates) {
+  const pool = getPool();
+  const setClauses = [];
+  const params = { id };
+
+  const fieldMap = {
+    nama: 'nama',
+    deskripsi: 'deskripsi',
+    leader_id: 'leader_id',
+  };
+
+  for (const [field, column] of Object.entries(fieldMap)) {
+    if (updates[field] !== undefined) {
+      setClauses.push(`${column} = :${field}`);
+      params[field] = updates[field];
+    }
+  }
+
+  if (setClauses.length === 0) return;
+
+  await pool.query(
+    `UPDATE cell_group SET ${setClauses.join(', ')} WHERE id = :id`,
+    params
+  );
+}
+
+/**
+ * Menghitung jumlah anggota aktif (left_at IS NULL) dalam sebuah CG.
+ * Dipakai sebelum deactivate untuk mencegah CG dengan anggota aktif dihapus.
+ *
+ * @param {number} cgId
+ * @returns {Promise<number>}
+ */
+async function countActiveMembers(cgId) {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    'SELECT COUNT(*) AS total FROM cell_group_members WHERE cg_id = :cgId AND left_at IS NULL',
+    { cgId }
+  );
+  return Number(rows[0].total);
+}
+
+/**
+ * Soft-delete CG: set is_active=FALSE dan deleted_at=NOW().
+ * @param {number} id
+ */
+async function deactivate(id) {
+  const pool = getPool();
+  await pool.query(
+    'UPDATE cell_group SET is_active = FALSE, deleted_at = NOW() WHERE id = :id',
+    { id }
+  );
 }
 
 module.exports = {
@@ -163,4 +226,7 @@ module.exports = {
   removeMember,
   findActiveMembers,
   findAll,
+  update,
+  countActiveMembers,
+  deactivate,
 };

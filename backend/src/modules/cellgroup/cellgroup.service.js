@@ -207,12 +207,134 @@ async function submitAbsensi(meetingId, absensiList, { actorUserId = null } = {}
   });
 }
 
+/**
+ * Update data CG (nama, deskripsi, leader_id).
+ *
+ * @param {number} cgId
+ * @param {object} data
+ * @param {object} options
+ */
+async function updateCellGroup(cgId, data, { actorUserId = null } = {}) {
+  const cg = await cgRepository.findById(cgId);
+  if (!cg) {
+    throw new CellGroupError('Cell Group tidak ditemukan', 404);
+  }
+
+  const allowedFields = ['nama', 'deskripsi', 'leader_id'];
+  const updates = {};
+  for (const field of allowedFields) {
+    if (data[field] !== undefined) updates[field] = data[field];
+  }
+
+  if (Object.keys(updates).length === 0) {
+    throw new CellGroupError('Tidak ada field yang diupdate', 400);
+  }
+
+  const before = { nama: cg.nama, deskripsi: cg.deskripsi, leader_id: cg.leader_id };
+  await cgRepository.update(cgId, updates);
+
+  await recordAuditLog({
+    userId: actorUserId,
+    aksi: 'UPDATE_CG',
+    modul: 'CELL_GROUP',
+    objectId: cgId,
+    dataSebelum: before,
+    dataSesudah: updates,
+  });
+}
+
+/**
+ * Nonaktifkan (soft-delete) CG. Ditolak jika masih ada anggota aktif.
+ *
+ * @param {number} cgId
+ * @param {object} options
+ * @throws {CellGroupError} 409 jika masih ada anggota aktif
+ */
+async function deactivateCellGroup(cgId, { actorUserId = null } = {}) {
+  const cg = await cgRepository.findById(cgId);
+  if (!cg) {
+    throw new CellGroupError('Cell Group tidak ditemukan', 404);
+  }
+
+  const activeMemberCount = await cgRepository.countActiveMembers(cgId);
+  if (activeMemberCount > 0) {
+    throw new CellGroupError(
+      `Cell Group masih memiliki ${activeMemberCount} anggota aktif. Keluarkan semua anggota terlebih dahulu`,
+      409
+    );
+  }
+
+  await cgRepository.deactivate(cgId);
+
+  await recordAuditLog({
+    userId: actorUserId,
+    aksi: 'DEACTIVATE_CG',
+    modul: 'CELL_GROUP',
+    objectId: cgId,
+    dataSebelum: { nama: cg.nama, is_active: cg.is_active },
+    dataSesudah: { is_active: false },
+  });
+}
+
+/**
+ * Update data meeting (judul, jenis, waktu_mulai, waktu_selesai, catatan).
+ * Validasi bahwa waktu_selesai tetap setelah waktu_mulai setelah update.
+ *
+ * @param {number} meetingId
+ * @param {object} data
+ * @param {object} options
+ */
+async function updateMeeting(meetingId, data, { actorUserId = null } = {}) {
+  const meeting = await meetingRepository.findMeetingById(meetingId);
+  if (!meeting) {
+    throw new CellGroupError('Meeting tidak ditemukan', 404);
+  }
+
+  const allowedFields = ['judul', 'jenis', 'waktu_mulai', 'waktu_selesai', 'catatan'];
+  const updates = {};
+  for (const field of allowedFields) {
+    if (data[field] !== undefined) updates[field] = data[field];
+  }
+
+  if (Object.keys(updates).length === 0) {
+    throw new CellGroupError('Tidak ada field yang diupdate', 400);
+  }
+
+  const waktuMulai = updates.waktu_mulai || meeting.waktu_mulai;
+  const waktuSelesai = updates.waktu_selesai || meeting.waktu_selesai;
+  if (new Date(waktuSelesai) <= new Date(waktuMulai)) {
+    throw new CellGroupError('waktu_selesai harus setelah waktu_mulai', 400);
+  }
+
+  const before = {
+    judul: meeting.judul,
+    jenis: meeting.jenis,
+    waktu_mulai: meeting.waktu_mulai,
+    waktu_selesai: meeting.waktu_selesai,
+    catatan: meeting.catatan,
+  };
+
+  await meetingRepository.updateMeeting(meetingId, updates);
+
+  await recordAuditLog({
+    userId: actorUserId,
+    aksi: 'UPDATE_MEETING',
+    modul: 'CELL_GROUP',
+    objectId: meetingId,
+    dataSebelum: before,
+    dataSesudah: updates,
+  });
+}
+
 module.exports = {
   CellGroupError,
   createCellGroup,
+  updateCellGroup,
+  deactivateCellGroup,
   addMemberToCg,
   removeMemberFromCg,
   createMeeting,
+  updateMeeting,
   addPhotoToMeeting,
   submitAbsensi,
   MAX_PHOTOS_PER_MEETING,

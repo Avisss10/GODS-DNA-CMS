@@ -91,11 +91,41 @@ async function countActiveLeaders() {
   return Number(rows[0].total);
 }
 
+/**
+ * Update password_hash user berdasarkan id.
+ * @param {number} id
+ * @param {string} passwordHash
+ */
+async function updatePassword(id, passwordHash) {
+  const pool = getPool();
+  await pool.query(
+    'UPDATE users SET password_hash = :passwordHash WHERE id = :id',
+    { id, passwordHash }
+  );
+}
+
+/**
+ * Ambil semua akun ADMIN (id, username, aktif, last_login_at) —
+ * dipakai oleh endpoint list admin yang hanya bisa diakses LEADER.
+ * @returns {Promise<Array<object>>}
+ */
+async function findAllAdmins() {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    `SELECT id, username, aktif, last_login_at
+     FROM users WHERE peran = 'ADMIN'
+     ORDER BY username ASC`
+  );
+  return rows;
+}
+
 module.exports = {
   findByUsername,
   findById,
   createUser,
   updateLastLogin,
   updateAktif,
+  updatePassword,
+  findAllAdmins,
   countActiveLeaders,
 };

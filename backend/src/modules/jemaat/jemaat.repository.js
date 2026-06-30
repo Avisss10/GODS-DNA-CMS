@@ -277,6 +277,49 @@ async function findAll({ search, limit = 50, offset = 0 } = {}) {
   return rows;
 }
 
+/**
+ * Mengambil daftar CG yang saat ini diikuti oleh seorang jemaat (left_at IS NULL).
+ *
+ * @param {number} jemaatId
+ * @returns {Promise<Array<object>>}
+ */
+async function findCgsByJemaatId(jemaatId) {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    `SELECT cg.id, cg.nama, cg.deskripsi, cg.is_active, cgm.joined_at
+     FROM cell_group_members cgm
+     JOIN cell_group cg ON cgm.cg_id = cg.id
+     WHERE cgm.jemaat_id = :jemaatId AND cgm.left_at IS NULL AND cg.deleted_at IS NULL
+     ORDER BY cgm.joined_at ASC`,
+    { jemaatId }
+  );
+  return rows;
+}
+
+/**
+ * Mengambil riwayat event yang dihadiri oleh seorang jemaat,
+ * bersumber dari event_attendances (termasuk auto-insert dari volunteer).
+ * Record yang di-void tidak ditampilkan.
+ *
+ * @param {number} jemaatId
+ * @param {{ limit?: number, offset?: number }} options
+ * @returns {Promise<Array<object>>}
+ */
+async function findEventsByJemaatId(jemaatId, { limit = 20, offset = 0 } = {}) {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    `SELECT e.id, e.judul, e.jenis, e.waktu_mulai, e.waktu_selesai, e.status,
+            ea.created_at AS hadir_at
+     FROM event_attendances ea
+     JOIN event e ON ea.event_id = e.id
+     WHERE ea.jemaat_id = :jemaatId AND ea.is_voided = FALSE
+     ORDER BY e.waktu_mulai DESC
+     LIMIT :limit OFFSET :offset`,
+    { jemaatId, limit: Number(limit), offset: Number(offset) }
+  );
+  return rows;
+}
+
 module.exports = {
   create,
   findById,
@@ -287,6 +330,8 @@ module.exports = {
   findDuplicateCandidatesByNameAndBirthdate,
   findDuplicateCandidatesByPhone,
   checkDependencies,
+  findCgsByJemaatId,
+  findEventsByJemaatId,
   isSimilarName,
   levenshteinDistance,
   normalizeDateFields,

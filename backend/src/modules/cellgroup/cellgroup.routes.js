@@ -17,11 +17,15 @@ const upload = multer({
 router.post('/cell-groups', authenticate, controller.createCellGroup);
 router.get('/cell-groups', authenticate, controller.listCellGroups);
 router.get('/cell-groups/:id', authenticate, controller.getCellGroupById);
+router.put('/cell-groups/:id', authenticate, controller.updateCellGroup);
+router.delete('/cell-groups/:id', authenticate, controller.deactivateCellGroup);
 router.get('/cell-groups/:id/members', authenticate, controller.getActiveMembers);
 router.post('/cell-groups/:id/members', authenticate, controller.addMember);
 router.delete('/cell-groups/:id/members/:jemaatId', authenticate, controller.removeMember);
+router.get('/cell-groups/:id/meetings', authenticate, controller.listMeetingsByCg);
 router.post('/cell-groups/:id/meetings', authenticate, controller.createMeeting);
 router.get('/cell-groups/meetings/:meetingId', authenticate, controller.getMeetingById);
+router.put('/cell-groups/meetings/:meetingId', authenticate, controller.updateMeeting);
 router.post('/cell-groups/meetings/:meetingId/photos', authenticate, upload.single('photo'), controller.uploadPhoto);
 router.get('/cell-groups/meetings/:meetingId/active-members', authenticate, controller.getActiveMembersAtMeetingTime);
 router.post('/cell-groups/meetings/:meetingId/absensi', authenticate, controller.submitAbsensi);

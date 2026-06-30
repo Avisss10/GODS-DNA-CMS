@@ -171,10 +171,59 @@ async function logout(accessToken) {
   });
 }
 
+/**
+ * Reset password akun ADMIN oleh LEADER.
+ * Leader tidak bisa reset password sesama Leader.
+ *
+ * @param {number} leaderId - id user yang melakukan reset (LEADER)
+ * @param {number} targetUserId - id akun ADMIN yang akan direset
+ * @param {string} newPassword - password baru (plaintext)
+ * @returns {Promise<{ username: string }>}
+ * @throws {AuthError} 404 jika target tidak ditemukan, 403 jika target bukan ADMIN
+ */
+async function resetAdminPassword(leaderId, targetUserId, newPassword) {
+  if (!newPassword || newPassword.length < 8) {
+    throw new AuthError('Password baru minimal 8 karakter', 400);
+  }
+
+  const target = await authRepository.findById(targetUserId);
+  if (!target) {
+    throw new AuthError('User tidak ditemukan', 404);
+  }
+  if (target.peran !== 'ADMIN') {
+    throw new AuthError('Hanya password akun ADMIN yang dapat direset oleh Leader', 403);
+  }
+
+  const { hashPassword } = require('../../utils/password.util');
+  const newHash = await hashPassword(newPassword);
+  await authRepository.updatePassword(targetUserId, newHash);
+
+  // Invalidasi sesi aktif target agar wajib login ulang
+  const redis = getRedisClient();
+  const previousToken = await redis.get(activeSessionKey(targetUserId));
+  if (previousToken) {
+    await redis.set(tokenBlacklistKey(previousToken), '1', 'EX', 8 * 60 * 60);
+  }
+  await redis.del(activeSessionKey(targetUserId));
+  await redis.del(refreshTokenKey(targetUserId));
+
+  await recordAuditLog({
+    userId: leaderId,
+    aksi: 'RESET_PASSWORD',
+    modul: 'AUTH',
+    objectId: targetUserId,
+    dataSebelum: { username: target.username },
+    dataSesudah: { username: target.username, passwordReset: true },
+  });
+
+  return { username: target.username };
+}
+
 module.exports = {
   AuthError,
   login,
   logout,
+  resetAdminPassword,
   failedLoginKey,
   activeSessionKey,
   refreshTokenKey,

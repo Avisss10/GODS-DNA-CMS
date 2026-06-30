@@ -100,16 +100,19 @@ async function findAllActive() {
 }
 
 /**
- * Ambil semua jenis volunteer aktif.
+ * Ambil semua jenis volunteer aktif beserta jumlah anggota aktif per tipe.
  * @returns {Promise<Array<object>>}
  */
 async function findAll() {
   const pool = getPool();
   const [rows] = await pool.query(
-    `SELECT id, nama, deskripsi, is_active
-     FROM volunteer_jenis
-     WHERE is_active = TRUE
-     ORDER BY nama ASC`
+    `SELECT vj.id, vj.nama, vj.deskripsi, vj.is_active,
+            COUNT(vm.id) AS jumlah_anggota
+     FROM volunteer_jenis vj
+     LEFT JOIN volunteer_members vm ON vm.volunteer_type_id = vj.id AND vm.is_active = TRUE
+     WHERE vj.is_active = TRUE
+     GROUP BY vj.id, vj.nama, vj.deskripsi, vj.is_active
+     ORDER BY vj.nama ASC`
   );
   return rows;
 }

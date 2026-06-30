@@ -131,12 +131,72 @@ async function findAbsensiByMeeting(meetingId) {
   return rows;
 }
 
+/**
+ * Mengambil list meeting milik sebuah CG, diurutkan terbaru dulu.
+ * Menyertakan jumlah foto per meeting untuk keperluan tampilan.
+ *
+ * @param {number} cgId
+ * @param {{ limit?: number, offset?: number }} options
+ * @returns {Promise<Array<object>>}
+ */
+async function findMeetingsByCgId(cgId, { limit = 20, offset = 0 } = {}) {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    `SELECT m.id, m.judul, m.jenis, m.waktu_mulai, m.waktu_selesai, m.catatan, m.created_at,
+            COUNT(p.id) AS jumlah_foto
+     FROM cg_meeting m
+     LEFT JOIN cg_meeting_photos p ON p.meeting_id = m.id
+     WHERE m.cg_id = :cgId
+     GROUP BY m.id
+     ORDER BY m.waktu_mulai DESC
+     LIMIT :limit OFFSET :offset`,
+    { cgId, limit: Number(limit), offset: Number(offset) }
+  );
+  return rows;
+}
+
+/**
+ * Update data meeting. Hanya field yang disertakan dalam `updates` yang diubah.
+ *
+ * @param {number} meetingId
+ * @param {{ judul?, jenis?, waktu_mulai?, waktu_selesai?, catatan? }} updates
+ */
+async function updateMeeting(meetingId, updates) {
+  const pool = getPool();
+  const setClauses = [];
+  const params = { meetingId };
+
+  const fieldMap = {
+    judul: 'judul',
+    jenis: 'jenis',
+    waktu_mulai: 'waktu_mulai',
+    waktu_selesai: 'waktu_selesai',
+    catatan: 'catatan',
+  };
+
+  for (const [field, column] of Object.entries(fieldMap)) {
+    if (updates[field] !== undefined) {
+      setClauses.push(`${column} = :${field}`);
+      params[field] = updates[field];
+    }
+  }
+
+  if (setClauses.length === 0) return;
+
+  await pool.query(
+    `UPDATE cg_meeting SET ${setClauses.join(', ')} WHERE id = :meetingId`,
+    params
+  );
+}
+
 module.exports = {
   createMeeting,
   findMeetingById,
+  findMeetingsByCgId,
   addMeetingPhoto,
   countMeetingPhotos,
   findActiveMembersAtMeetingTime,
   upsertAbsensi,
   findAbsensiByMeeting,
+  updateMeeting,
 };

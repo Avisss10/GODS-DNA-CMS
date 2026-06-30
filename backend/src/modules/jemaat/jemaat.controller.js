@@ -101,4 +101,27 @@ async function list(req, res) {
   }
 }
 
-module.exports = { create, getById, getSensitiveField, update, remove, list };
+async function getCellGroups(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const cgs = await jemaatRepository.findCgsByJemaatId(id);
+    return res.status(200).json(cgs);
+  } catch (err) {
+    console.error('Jemaat getCellGroups error:', err);
+    return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+}
+
+async function getEventHistory(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const { limit, offset } = req.query;
+    const events = await jemaatRepository.findEventsByJemaatId(id, { limit, offset });
+    return res.status(200).json(events);
+  } catch (err) {
+    console.error('Jemaat getEventHistory error:', err);
+    return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+}
+
+module.exports = { create, getById, getSensitiveField, update, remove, list, getCellGroups, getEventHistory };

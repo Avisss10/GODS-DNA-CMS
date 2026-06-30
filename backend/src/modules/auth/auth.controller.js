@@ -1,4 +1,5 @@
-const { login: loginService, logout: logoutService, AuthError } = require('./auth.service');
+const { login: loginService, logout: logoutService, resetAdminPassword: resetAdminPasswordService, AuthError } = require('./auth.service');
+const { findAllAdmins } = require('./auth.repository');
 
 const ACCESS_TOKEN_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 jam
 const REFRESH_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 hari
@@ -57,4 +58,37 @@ async function logout(req, res) {
   }
 }
 
-module.exports = { login, logout };
+async function listAdmins(req, res) {
+  try {
+    const admins = await findAllAdmins();
+    return res.status(200).json(admins);
+  } catch (err) {
+    console.error('listAdmins error:', err);
+    return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+}
+
+async function resetAdminPassword(req, res) {
+  const targetUserId = Number(req.params.id);
+  const { newPassword } = req.body;
+
+  if (!targetUserId || isNaN(targetUserId)) {
+    return res.status(400).json({ message: 'ID user tidak valid' });
+  }
+  if (!newPassword) {
+    return res.status(400).json({ message: 'newPassword wajib diisi' });
+  }
+
+  try {
+    const result = await resetAdminPasswordService(req.user.userId, targetUserId, newPassword);
+    return res.status(200).json({ message: `Password akun "${result.username}" berhasil direset` });
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return res.status(err.statusCode).json({ message: err.message });
+    }
+    console.error('resetAdminPassword error:', err);
+    return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+}
+
+module.exports = { login, logout, listAdmins, resetAdminPassword };
