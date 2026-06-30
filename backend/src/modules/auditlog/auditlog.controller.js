@@ -3,9 +3,9 @@ const auditlogService = require('./auditlog.service');
 // GET /api/audit-logs
 async function listAuditLogs(req, res) {
   try {
-    const { modul, aksi, userId, objectId, limit, offset } = req.query;
+    const { modul, aksi, userId, objectId, startDate, endDate, limit, offset } = req.query;
     const result = await auditlogService.listAuditLogs({
-      modul, aksi, userId, objectId, limit, offset,
+      modul, aksi, userId, objectId, startDate, endDate, limit, offset,
     });
     return res.status(200).json(result);
   } catch (err) {

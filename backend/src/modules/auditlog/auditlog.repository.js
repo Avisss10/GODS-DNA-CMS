@@ -83,7 +83,7 @@ async function recordAuditLog({ userId, aksi, modul, objectId = null, dataSebelu
  * @param {{ modul?, aksi?, userId?, objectId?, limit?, offset? }} filters
  * @returns {Promise<Array<object>>}
  */
-async function findAll({ modul, aksi, userId, objectId, limit = 50, offset = 0 } = {}) {
+async function findAll({ modul, aksi, userId, objectId, startDate, endDate, limit = 50, offset = 0 } = {}) {
   const pool = getPool();
   const conditions = [];
   const params = { limit: Number(limit), offset: Number(offset) };
@@ -92,6 +92,8 @@ async function findAll({ modul, aksi, userId, objectId, limit = 50, offset = 0 }
   if (aksi) { conditions.push('aksi = :aksi'); params.aksi = aksi; }
   if (userId) { conditions.push('user_id = :userId'); params.userId = Number(userId); }
   if (objectId) { conditions.push('object_id = :objectId'); params.objectId = Number(objectId); }
+  if (startDate) { conditions.push('created_at >= :startDate'); params.startDate = startDate; }
+  if (endDate) { conditions.push('created_at <= :endDate'); params.endDate = endDate; }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 

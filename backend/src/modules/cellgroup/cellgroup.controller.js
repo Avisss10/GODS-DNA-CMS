@@ -3,6 +3,7 @@ const cgRepository = require('./cellgroup.repository');
 const meetingRepository = require('./cellgroup-meeting.repository');
 const { CellGroupError } = cgService;
 
+
 function handleError(err, res) {
   if (err instanceof CellGroupError) {
     return res.status(err.statusCode).json({ message: err.message });
@@ -145,16 +146,64 @@ async function listCellGroups(req, res) {
   }
 }
 
+async function updateCellGroup(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const actorUserId = req.user?.userId ?? null;
+    await cgService.updateCellGroup(id, req.body, { actorUserId });
+    return res.status(200).json({ message: 'Cell Group berhasil diupdate' });
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+async function deactivateCellGroup(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const actorUserId = req.user?.userId ?? null;
+    await cgService.deactivateCellGroup(id, { actorUserId });
+    return res.status(200).json({ message: 'Cell Group berhasil dinonaktifkan' });
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+async function listMeetingsByCg(req, res) {
+  try {
+    const cgId = Number(req.params.id);
+    const { limit, offset } = req.query;
+    const meetings = await meetingRepository.findMeetingsByCgId(cgId, { limit, offset });
+    return res.status(200).json(meetings);
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+async function updateMeeting(req, res) {
+  try {
+    const meetingId = Number(req.params.meetingId);
+    const actorUserId = req.user?.userId ?? null;
+    await cgService.updateMeeting(meetingId, req.body, { actorUserId });
+    return res.status(200).json({ message: 'Meeting berhasil diupdate' });
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
 module.exports = {
   createCellGroup,
+  updateCellGroup,
+  deactivateCellGroup,
   listCellGroups,
   getCellGroupById,
   getActiveMembers,
   addMember,
   removeMember,
   createMeeting,
+  updateMeeting,
   getMeetingById,
   uploadPhoto,
   getActiveMembersAtMeetingTime,
   submitAbsensi,
+  listMeetingsByCg,
 };
