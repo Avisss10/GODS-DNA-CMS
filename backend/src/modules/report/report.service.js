@@ -4,13 +4,15 @@ const fs = require('fs');
 const reportRepository = require('./report.repository');
 const { recordAuditLog } = require('../auditlog/auditlog.repository');
 const { decrypt } = require('../../utils/encryption.util');
+const { getRedisClient } = require('../../config/redis');
 
 const SYNC_THRESHOLD = 500; // record < 500 → sinkron
 const REPORT_DIR = path.join(__dirname, '../../../uploads/reports');
-const SIGNED_URL_TTL_MS = 15 * 60 * 1000; // 15 menit
+const SIGNED_URL_TTL_SECONDS = 15 * 60; // 15 menit
 
-// In-memory store untuk signed URL (production: gunakan Redis)
-const signedUrlStore = new Map();
+function signedUrlKey(token) {
+  return `signed_url:${token}`;
+}
 
 // Pastikan direktori report ada
 if (!fs.existsSync(REPORT_DIR)) {
@@ -28,34 +30,37 @@ function generateFileName(ext = 'json') {
 }
 
 /**
- * Generate signed URL yang berlaku 15 menit.
- * Sesuai BAGIAN 7: signed URL, auto-delete setelah 1x unduh atau 1 jam.
+ * Generate signed URL yang berlaku 15 menit, disimpan di Redis
+ * (audit item 3 — persistent & shared antar instance).
+ * Key: signed_url:{token} → JSON { fileName }, EX 900.
+ * Sesuai BAGIAN 7: signed URL, auto-delete setelah 1x unduh atau 15 menit.
  * @param {string} fileName
- * @returns {string} token
+ * @returns {Promise<string>} token
  */
-function generateSignedToken(fileName) {
+async function generateSignedToken(fileName) {
   const token = crypto.randomUUID();
-  const expiresAt = Date.now() + SIGNED_URL_TTL_MS;
-  signedUrlStore.set(token, { fileName, expiresAt, used: false });
+  const redis = getRedisClient();
+  await redis.set(signedUrlKey(token), JSON.stringify({ fileName }), 'EX', SIGNED_URL_TTL_SECONDS);
   return token;
 }
 
 /**
- * Validasi dan konsumsi signed token (1x pakai).
+ * Validasi dan konsumsi signed token (1x pakai) via Redis GETDEL —
+ * atomik: ambil & hapus dalam satu operasi sehingga race minim.
+ * Key yang tidak ada (expired/used/invalid) → null.
  * @param {string} token
- * @returns {{ fileName: string } | null}
+ * @returns {Promise<{ fileName: string } | null>}
  */
-function consumeSignedToken(token) {
-  const entry = signedUrlStore.get(token);
-  if (!entry) return null;
-  if (entry.used) return null;
-  if (Date.now() > entry.expiresAt) {
-    signedUrlStore.delete(token);
+async function consumeSignedToken(token) {
+  const redis = getRedisClient();
+  const raw = await redis.getdel(signedUrlKey(token));
+  if (!raw) return null;
+  try {
+    const { fileName } = JSON.parse(raw);
+    return { fileName };
+  } catch {
     return null;
   }
-  entry.used = true;
-  signedUrlStore.delete(token);
-  return { fileName: entry.fileName };
 }
 
 /**
@@ -119,7 +124,7 @@ async function generateJemaatReport({ includeSensitive = false } = {}, { actorUs
 
     const fileName = generateFileName('json');
     fs.writeFileSync(path.join(REPORT_DIR, fileName), JSON.stringify(processed));
-    const token = generateSignedToken(fileName);
+    const token = await generateSignedToken(fileName);
 
     return { async: true, token, message: 'Laporan sedang diproses, gunakan token untuk mengunduh' };
   }
@@ -221,10 +226,10 @@ async function generateAnalyticsReport({ bulan = 12 } = {}, { actorUserId = null
  * Download file laporan menggunakan signed token (1x pakai, 15 menit).
  * Sesuai BAGIAN 7: auto-delete setelah 1x unduh.
  * @param {string} token
- * @returns {{ filePath: string, fileName: string } | null}
+ * @returns {Promise<{ filePath: string, fileName: string } | null>}
  */
-function downloadReport(token) {
-  const entry = consumeSignedToken(token);
+async function downloadReport(token) {
+  const entry = await consumeSignedToken(token);
   if (!entry) return null;
 
   const filePath = path.join(REPORT_DIR, entry.fileName);

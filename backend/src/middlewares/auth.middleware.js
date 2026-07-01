@@ -40,23 +40,7 @@ async function authenticate(req, res, next) {
   return next();
 }
 
-/**
- * Middleware authorization — membatasi akses hanya untuk peran
- * tertentu (misal hanya LEADER). Dipakai SETELAH authenticate,
- * karena bergantung pada req.user yang di-attach olehnya.
- *
- * @param {...string} allowedRoles
- */
-function requireRole(...allowedRoles) {
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ message: 'Token tidak ditemukan, silakan login' });
-    }
-    if (!allowedRoles.includes(req.user.peran)) {
-      return res.status(403).json({ message: 'Anda tidak memiliki akses untuk aksi ini' });
-    }
-    return next();
-  };
-}
+// Catatan: otorisasi berbasis peran (requireRole) sekarang hanya ada di
+// role.middleware.js sebagai satu-satunya source of truth. Lihat audit item 1.
 
-module.exports = { authenticate, requireRole };
+module.exports = { authenticate };

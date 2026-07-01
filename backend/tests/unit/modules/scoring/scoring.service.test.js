@@ -163,12 +163,14 @@ describe('scoring.service — hitungSkorJemaat (Unit Test)', () => {
 });
 
 // ── runScoringBatch ───────────────────────────────────────────────
-describe('scoring.service — runScoringBatch (Unit Test)', () => {
-  it('harus memproses semua jemaat yang memenuhi syarat', async () => {
-    scoringRepository.getJemaatForScoring.mockResolvedValue([
-      { id: 1, skor_keaktifan: 50, status_keaktifan: 'AKTIF', is_non_cg: false },
-      { id: 2, skor_keaktifan: 30, status_keaktifan: 'KURANG_AKTIF', is_non_cg: true },
-    ]);
+describe('scoring.service — runScoringBatch (Unit Test, chunked)', () => {
+  it('harus memproses semua jemaat yang memenuhi syarat (satu chunk)', async () => {
+    scoringRepository.getJemaatForScoring
+      .mockResolvedValueOnce([
+        { id: 1, skor_keaktifan: 50, status_keaktifan: 'AKTIF', is_non_cg: false },
+        { id: 2, skor_keaktifan: 30, status_keaktifan: 'KURANG_AKTIF', is_non_cg: true },
+      ])
+      .mockResolvedValueOnce([]);
     scoringRepository.isActiveCGMember.mockResolvedValue(false);
     scoringRepository.getRecentEvents.mockResolvedValue([]);
     scoringRepository.getVolunteerAssignments.mockResolvedValue([]);
@@ -183,10 +185,39 @@ describe('scoring.service — runScoringBatch (Unit Test)', () => {
     expect(recordAuditLog).toHaveBeenCalledTimes(2);
   });
 
+  it('harus fetch per-chunk memakai limit/offset sampai chunk kosong', async () => {
+    scoringRepository.getJemaatForScoring
+      .mockResolvedValueOnce([{ id: 1, skor_keaktifan: 0, status_keaktifan: 'AKTIF', is_non_cg: true }])
+      .mockResolvedValueOnce([{ id: 2, skor_keaktifan: 0, status_keaktifan: 'AKTIF', is_non_cg: true }])
+      .mockResolvedValueOnce([]);
+    scoringRepository.isActiveCGMember.mockResolvedValue(false);
+    scoringRepository.getRecentEvents.mockResolvedValue([]);
+    scoringRepository.getVolunteerAssignments.mockResolvedValue([]);
+    scoringRepository.getEventAttendances.mockResolvedValue([]);
+    scoringRepository.updateSkor.mockResolvedValue();
+
+    const result = await runScoringBatch();
+
+    // Akumulasi lintas chunk
+    expect(result.processed).toBe(2);
+    expect(result.skipped).toBe(0);
+
+    // Dipanggil beberapa kali dengan offset bertambah, limit tetap
+    const calls = scoringRepository.getJemaatForScoring.mock.calls;
+    expect(calls.length).toBe(3);
+    expect(calls[0][0]).toMatchObject({ offset: 0 });
+    const limit = calls[0][0].limit;
+    expect(typeof limit).toBe('number');
+    expect(calls[1][0]).toMatchObject({ offset: limit });
+    expect(calls[2][0]).toMatchObject({ offset: limit * 2 });
+  });
+
   it('harus menghitung skipped jika ada error pada satu jemaat', async () => {
-    scoringRepository.getJemaatForScoring.mockResolvedValue([
-      { id: 1, skor_keaktifan: 50, status_keaktifan: 'AKTIF', is_non_cg: false },
-    ]);
+    scoringRepository.getJemaatForScoring
+      .mockResolvedValueOnce([
+        { id: 1, skor_keaktifan: 50, status_keaktifan: 'AKTIF', is_non_cg: false },
+      ])
+      .mockResolvedValueOnce([]);
     scoringRepository.isActiveCGMember.mockRejectedValue(new Error('DB error'));
 
     const result = await runScoringBatch();

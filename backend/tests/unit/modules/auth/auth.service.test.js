@@ -11,11 +11,12 @@ const {
   signAccessToken,
   signRefreshToken,
   verifyAccessToken,
+  verifyRefreshToken,
 } = require('../../../../src/utils/jwt.util');
 const { getRedisClient } = require('../../../../src/config/redis');
 const { recordAuditLog } = require('../../../../src/modules/auditlog/auditlog.repository');
 const { notifyLeaders } = require('../../../../src/modules/notification/notification.stub');
-const { login, logout, AuthError } = require('../../../../src/modules/auth/auth.service');
+const { login, logout, refreshAccessToken, AuthError } = require('../../../../src/modules/auth/auth.service');
 
 describe('auth.service — login (Unit Test)', () => {
   let mockRedis;
@@ -184,5 +185,56 @@ describe('auth.service — logout (Unit Test)', () => {
       'blacklist_token:token-kadaluwarsa', '1', 'EX', 8 * 60 * 60
     );
     expect(mockRedis.del).not.toHaveBeenCalled();
+  });
+});
+
+describe('auth.service — refreshAccessToken (Unit Test)', () => {
+  let mockRedis;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockRedis = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
+    };
+    getRedisClient.mockReturnValue(mockRedis);
+    signAccessToken.mockReturnValue('new-access-token');
+  });
+
+  it('harus mengembalikan access token baru jika refresh token valid & cocok dengan Redis & user aktif', async () => {
+    verifyRefreshToken.mockReturnValue({ userId: 7 });
+    mockRedis.get.mockResolvedValue('refresh-token-cookie'); // refresh_token:7
+    authRepository.findById.mockResolvedValue({ id: 7, peran: 'ADMIN', aktif: true });
+
+    const result = await refreshAccessToken('refresh-token-cookie');
+
+    expect(signAccessToken).toHaveBeenCalledWith({ userId: 7, peran: 'ADMIN' });
+    expect(mockRedis.set).toHaveBeenCalledWith('active_session:7', 'new-access-token', 'EX', 8 * 60 * 60);
+    expect(result).toEqual({ accessToken: 'new-access-token' });
+  });
+
+  it('harus 401 jika refresh token tidak valid / kedaluwarsa', async () => {
+    verifyRefreshToken.mockImplementation(() => { throw new Error('jwt expired'); });
+
+    await expect(refreshAccessToken('token-rusak'))
+      .rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('harus 401 jika refresh token tidak cocok dengan yang tersimpan di Redis', async () => {
+    verifyRefreshToken.mockReturnValue({ userId: 7 });
+    mockRedis.get.mockResolvedValue('refresh-token-lain'); // beda dengan cookie
+
+    await expect(refreshAccessToken('refresh-token-cookie'))
+      .rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('harus 401 jika user sudah nonaktif', async () => {
+    verifyRefreshToken.mockReturnValue({ userId: 7 });
+    mockRedis.get.mockResolvedValue('refresh-token-cookie');
+    authRepository.findById.mockResolvedValue({ id: 7, peran: 'ADMIN', aktif: false });
+
+    await expect(refreshAccessToken('refresh-token-cookie'))
+      .rejects.toMatchObject({ statusCode: 401 });
   });
 });

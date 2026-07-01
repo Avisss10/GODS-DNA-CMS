@@ -85,7 +85,7 @@ async function analyticsReport(req, res) {
 async function downloadReport(req, res) {
   try {
     const { token } = req.params;
-    const entry = reportService.downloadReport(token);
+    const entry = await reportService.downloadReport(token);
 
     if (!entry) {
       return res.status(404).json({ message: 'Token tidak valid, sudah digunakan, atau sudah kadaluarsa' });

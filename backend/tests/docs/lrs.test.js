@@ -27,6 +27,7 @@ const expectedForeignKeys = [
   'event_attendances.voided_by',
   'event_kehadiran.event_id',
   'audit_logs.user_id',
+  'notifications.user_id',
 ];
 
 describe('LRS Documentation', () => {
@@ -45,8 +46,8 @@ describe('LRS Documentation', () => {
     expect(content).toMatch(/erDiagram/);
   });
 
-  it('harus mendokumentasikan tepat 23 relasi foreign key', () => {
-    expect(expectedForeignKeys.length).toBe(23);
+  it('harus mendokumentasikan tepat 24 relasi foreign key', () => {
+    expect(expectedForeignKeys.length).toBe(24);
   });
 
   expectedForeignKeys.forEach((fk) => {

@@ -51,7 +51,7 @@ describe('migration-runner — parseStatements (Unit Test)', () => {
     expect(result).toEqual([]);
   });
 
-  it('harus berhasil mem-parsing keseluruhan schema.sql nyata menjadi tepat 15 CREATE TABLE', () => {
+  it('harus berhasil mem-parsing keseluruhan schema.sql nyata menjadi tepat 16 CREATE TABLE', () => {
     const fs = require('fs');
     const path = require('path');
     const schemaPath = path.join(
@@ -65,6 +65,6 @@ describe('migration-runner — parseStatements (Unit Test)', () => {
       /^CREATE TABLE \w+/.test(s)
     );
 
-    expect(createTableStatements).toHaveLength(15);
+    expect(createTableStatements).toHaveLength(16);
   });
 });

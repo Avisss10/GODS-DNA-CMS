@@ -1,6 +1,6 @@
 const { getRedisClient } = require('../../config/redis');
 const { comparePassword } = require('../../utils/password.util');
-const { signAccessToken, signRefreshToken, verifyAccessToken } = require('../../utils/jwt.util');
+const { signAccessToken, signRefreshToken, verifyAccessToken, verifyRefreshToken } = require('../../utils/jwt.util');
 const authRepository = require('./auth.repository');
 const { recordAuditLog } = require('../auditlog/auditlog.repository');
 const { notifyLeaders } = require('../notification/notification.stub');
@@ -172,6 +172,50 @@ async function logout(accessToken) {
 }
 
 /**
+ * Memperpanjang access token memakai refresh token dari cookie
+ * (audit item 4). Scope minimal: refresh token TIDAK dirotasi —
+ * hanya menerbitkan access token baru dan menyetel ulang sesi aktif.
+ *
+ * Validasi berlapis:
+ * 1. Refresh token harus valid (tidak expired/rusak) → 401 jika gagal.
+ * 2. Harus cocok dengan yang tersimpan di Redis (refresh_token:{userId}) —
+ *    jika tidak cocok berarti sudah logout/diganti → 401.
+ * 3. User harus masih ada & aktif → 401 jika tidak.
+ *
+ * @param {string} refreshTokenFromCookie
+ * @returns {Promise<{ accessToken: string }>}
+ * @throws {AuthError} 401 untuk semua kegagalan validasi
+ */
+async function refreshAccessToken(refreshTokenFromCookie) {
+  const redis = getRedisClient();
+
+  let userId;
+  try {
+    ({ userId } = verifyRefreshToken(refreshTokenFromCookie));
+  } catch (err) {
+    throw new AuthError('Refresh token tidak valid atau kedaluwarsa', 401);
+  }
+
+  // Cek refresh token cocok dengan yang tersimpan (belum logout/diganti)
+  const storedRefreshToken = await redis.get(refreshTokenKey(userId));
+  if (!storedRefreshToken || storedRefreshToken !== refreshTokenFromCookie) {
+    throw new AuthError('Refresh token tidak valid atau kedaluwarsa', 401);
+  }
+
+  // Cek user masih ada & aktif
+  const user = await authRepository.findById(userId);
+  if (!user || !user.aktif) {
+    throw new AuthError('Refresh token tidak valid atau kedaluwarsa', 401);
+  }
+
+  const accessToken = signAccessToken({ userId, peran: user.peran });
+  // Set ulang sesi aktif (TTL 8 jam, sama seperti login)
+  await redis.set(activeSessionKey(userId), accessToken, 'EX', 8 * 60 * 60);
+
+  return { accessToken };
+}
+
+/**
  * Reset password akun ADMIN oleh LEADER.
  * Leader tidak bisa reset password sesama Leader.
  *
@@ -223,6 +267,7 @@ module.exports = {
   AuthError,
   login,
   logout,
+  refreshAccessToken,
   resetAdminPassword,
   failedLoginKey,
   activeSessionKey,
