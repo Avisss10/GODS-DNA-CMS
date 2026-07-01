@@ -28,6 +28,7 @@ CREATE TABLE jemaat (
     jenis_kelamin       ENUM('L','P') NOT NULL,
     no_hp               TEXT NULL,
     no_hp_iv            VARCHAR(32) NULL,
+    no_hp_hash          CHAR(64) NULL,
     alamat              TEXT NULL,
     alamat_iv           VARCHAR(32) NULL,
     media_sosial        TEXT NULL,
@@ -47,6 +48,7 @@ CREATE TABLE jemaat (
     INDEX idx_jemaat_nama_tgl_lahir (nama, tgl_lahir),
     INDEX idx_jemaat_is_active (is_active),
     INDEX idx_jemaat_status_keaktifan (status_keaktifan),
+    INDEX idx_jemaat_no_hp_hash (no_hp_hash),
 
     CONSTRAINT chk_skor_keaktifan CHECK (skor_keaktifan BETWEEN 0 AND 100)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

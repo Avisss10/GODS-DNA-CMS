@@ -3,6 +3,8 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 
+const { corsOriginValidator } = require('./utils/cors.util');
+
 const healthRoutes = require('./modules/health/health.routes');
 const authRoutes = require('./modules/auth/auth.routes');
 const jemaatRoutes = require('./modules/jemaat/jemaat.routes');
@@ -20,7 +22,7 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({ origin: corsOriginValidator, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 

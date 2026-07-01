@@ -3,12 +3,20 @@ const router = express.Router();
 const volunteerController = require('./volunteer.controller');
 const { authenticate } = require('../../middlewares/auth.middleware');
 const { requireRole } = require('../../middlewares/role.middleware');
+const { handleValidationErrors } = require('../../middlewares/validation.middleware');
+const {
+  createVolunteerTypeValidation,
+  updateVolunteerTypeValidation,
+  registerVolunteerValidation,
+} = require('./volunteer.validation');
 
 // ── Volunteer Types (master data) ─────────────────────────────────
 router.post(
   '/volunteer-types',
   authenticate,
   requireRole('ADMIN', 'LEADER'),
+  createVolunteerTypeValidation,
+  handleValidationErrors,
   volunteerController.createVolunteerType
 );
 
@@ -22,6 +30,8 @@ router.put(
   '/volunteer-types/:id',
   authenticate,
   requireRole('ADMIN', 'LEADER'),
+  updateVolunteerTypeValidation,
+  handleValidationErrors,
   volunteerController.updateVolunteerType
 );
 
@@ -42,6 +52,8 @@ router.get(
 router.post(
   '/jemaat/:jemaatId/volunteer',
   authenticate,
+  registerVolunteerValidation,
+  handleValidationErrors,
   volunteerController.registerVolunteer
 );
 

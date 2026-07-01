@@ -1,6 +1,10 @@
 const scoringRepository = require('./scoring.repository');
 const { recordAuditLog } = require('../auditlog/auditlog.repository');
 
+// Ukuran chunk pemrosesan scoring (audit item 6) — jemaat diambil
+// per halaman agar tidak memuat seluruh tabel ke memori sekaligus.
+const BATCH_SIZE = 200;
+
 // Bobot event sesuai BAGIAN 6.1
 const BOBOT_BERTUGAS = 1.5;
 const BOBOT_HADIR = 1.0;
@@ -157,37 +161,47 @@ async function hitungSkorJemaat(jemaatId, jemaatData) {
  * @returns {Promise<{ processed: number, skipped: number }>}
  */
 async function runScoringBatch({ actorUserId = null } = {}) {
-  const jemaatList = await scoringRepository.getJemaatForScoring();
-
   let processed = 0;
   let skipped = 0;
+  let offset = 0;
 
-  for (const jemaat of jemaatList) {
-    try {
-      const { skorBaru, statusBaru, isNonCg } = await hitungSkorJemaat(jemaat.id, jemaat);
+  // Ambil jemaat per-chunk sampai chunk kosong (audit item 6).
+  // Logika per-jemaat tetap sama persis: sequential, audit log per record,
+  // catch-per-record — hanya cara fetch yang berubah dari "semua sekaligus".
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const chunk = await scoringRepository.getJemaatForScoring({ limit: BATCH_SIZE, offset });
+    if (!chunk || chunk.length === 0) break;
 
-      await scoringRepository.updateSkor(jemaat.id, skorBaru, statusBaru, isNonCg);
+    for (const jemaat of chunk) {
+      try {
+        const { skorBaru, statusBaru, isNonCg } = await hitungSkorJemaat(jemaat.id, jemaat);
 
-      await recordAuditLog({
-        userId: actorUserId,
-        aksi: 'UPDATE',
-        modul: 'SCORING',
-        objectId: jemaat.id,
-        dataSebelum: {
-          skor_keaktifan: jemaat.skor_keaktifan,
-          status_keaktifan: jemaat.status_keaktifan,
-        },
-        dataSesudah: {
-          skor_keaktifan: skorBaru,
-          status_keaktifan: statusBaru,
-        },
-      });
+        await scoringRepository.updateSkor(jemaat.id, skorBaru, statusBaru, isNonCg);
 
-      processed++;
-    } catch (err) {
-      console.error(`Scoring error untuk jemaat ${jemaat.id}:`, err.message);
-      skipped++;
+        await recordAuditLog({
+          userId: actorUserId,
+          aksi: 'UPDATE',
+          modul: 'SCORING',
+          objectId: jemaat.id,
+          dataSebelum: {
+            skor_keaktifan: jemaat.skor_keaktifan,
+            status_keaktifan: jemaat.status_keaktifan,
+          },
+          dataSesudah: {
+            skor_keaktifan: skorBaru,
+            status_keaktifan: statusBaru,
+          },
+        });
+
+        processed++;
+      } catch (err) {
+        console.error(`Scoring error untuk jemaat ${jemaat.id}:`, err.message);
+        skipped++;
+      }
     }
+
+    offset += BATCH_SIZE;
   }
 
   return { processed, skipped };

@@ -53,6 +53,20 @@ describe('jemaat.repository — create (Unit Test)', () => {
     expect(params.mediaSosial).toBeDefined();
   });
 
+  it('harus menyimpan no_hp_hash (SHA-256 hex) saat no_hp diberikan', async () => {
+    const { hashPhone } = require('../../../../src/utils/hash.util');
+    const mockPool = { query: jest.fn().mockResolvedValue([{ insertId: 1 }]) };
+    getPool.mockReturnValue(mockPool);
+
+    await repo.create({
+      nama: 'Budi', tgl_lahir: '1990-01-01', jenis_kelamin: 'L',
+      no_hp: '081234567890', tgl_bergabung: '2026-06-01',
+    });
+
+    const params = mockPool.query.mock.calls[0][1];
+    expect(params.noHpHash).toBe(hashPhone('081234567890'));
+  });
+
   it('harus menghitung new_member_until = tgl_bergabung + 30 hari', async () => {
     const mockPool = { query: jest.fn().mockResolvedValue([{ insertId: 1 }]) };
     getPool.mockReturnValue(mockPool);
@@ -229,30 +243,27 @@ describe('jemaat.repository — findDuplicateCandidatesByNameAndBirthdate (Unit 
   });
 });
 
-describe('jemaat.repository — findDuplicateCandidatesByPhone (Unit Test)', () => {
-  it('harus menemukan kecocokan setelah dekripsi', async () => {
-    const { encrypt } = require('../../../../src/utils/encryption.util');
-    const enc = encrypt('081234567890');
-
+describe('jemaat.repository — findDuplicateCandidatesByPhone (Unit Test, hash-based)', () => {
+  it('harus query memakai no_hp_hash (bukan dekripsi massal)', async () => {
+    const { hashPhone } = require('../../../../src/utils/hash.util');
     const mockPool = {
-      query: jest.fn().mockResolvedValue([[
-        { id: 1, nama: 'Budi', no_hp: enc.ciphertext, no_hp_iv: enc.iv },
-      ]]),
+      query: jest.fn().mockResolvedValue([[{ id: 1, nama: 'Budi' }]]),
     };
     getPool.mockReturnValue(mockPool);
 
     const result = await repo.findDuplicateCandidatesByPhone('081234567890');
 
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe(1);
+    const sql = mockPool.query.mock.calls[0][0];
+    const params = mockPool.query.mock.calls[0][1];
+    expect(sql).toMatch(/no_hp_hash\s*=\s*:hash/);
+    expect(sql).toMatch(/deleted_at IS NULL/);
+    expect(sql).not.toMatch(/no_hp_iv/); // tidak lagi mengambil/ dekripsi IV
+    expect(params.hash).toBe(hashPhone('081234567890'));
+    expect(result).toEqual([{ id: 1, nama: 'Budi' }]);
   });
 
-  it('tidak boleh gagal total jika ada baris dengan IV korup', async () => {
-    const mockPool = {
-      query: jest.fn().mockResolvedValue([[
-        { id: 1, nama: 'Budi', no_hp: 'data-korup', no_hp_iv: 'iv-korup' },
-      ]]),
-    };
+  it('harus mengembalikan array kosong jika tidak ada baris dengan hash sama', async () => {
+    const mockPool = { query: jest.fn().mockResolvedValue([[]]) };
     getPool.mockReturnValue(mockPool);
 
     const result = await repo.findDuplicateCandidatesByPhone('081234567890');

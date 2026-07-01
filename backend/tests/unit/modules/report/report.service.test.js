@@ -1,10 +1,14 @@
 jest.mock('../../../../src/modules/report/report.repository');
 jest.mock('../../../../src/modules/auditlog/auditlog.repository');
 jest.mock('../../../../src/utils/encryption.util');
+jest.mock('../../../../src/config/redis');
 
 const reportRepository = require('../../../../src/modules/report/report.repository');
 const { recordAuditLog } = require('../../../../src/modules/auditlog/auditlog.repository');
 const { decrypt } = require('../../../../src/utils/encryption.util');
+const { getRedisClient } = require('../../../../src/config/redis');
+
+let mockRedis;
 
 const {
   generateJemaatReport,
@@ -21,6 +25,19 @@ beforeEach(() => {
   jest.clearAllMocks();
   recordAuditLog.mockResolvedValue(1);
   decrypt.mockImplementation((val) => `decrypted:${val}`);
+
+  // Signed-URL store sekarang di Redis (audit item 3). Mock in-memory
+  // sederhana agar one-time-use (GETDEL) tetap teruji.
+  const store = new Map();
+  mockRedis = {
+    set: jest.fn((key, value) => { store.set(key, value); return Promise.resolve('OK'); }),
+    getdel: jest.fn((key) => {
+      const v = store.has(key) ? store.get(key) : null;
+      store.delete(key);
+      return Promise.resolve(v);
+    }),
+  };
+  getRedisClient.mockReturnValue(mockRedis);
 });
 
 // ── dekripsiBarisJemaat ───────────────────────────────────────────
@@ -48,23 +65,33 @@ describe('report.service — dekripsiBarisJemaat (Unit Test)', () => {
 });
 
 // ── generateSignedToken & consumeSignedToken ──────────────────────
-describe('report.service — signed token (Unit Test)', () => {
-  it('token yang valid harus bisa dikonsumsi 1x', () => {
-    const token = generateSignedToken('test-file.json');
-    const result = consumeSignedToken(token);
+describe('report.service — signed token (Unit Test, Redis-backed)', () => {
+  it('token yang valid harus bisa dikonsumsi 1x', async () => {
+    const token = await generateSignedToken('test-file.json');
+    const result = await consumeSignedToken(token);
     expect(result).not.toBeNull();
     expect(result.fileName).toBe('test-file.json');
   });
 
-  it('token yang sudah dipakai tidak bisa dipakai lagi', () => {
-    const token = generateSignedToken('test-file2.json');
-    consumeSignedToken(token); // pakai pertama
-    const result = consumeSignedToken(token); // pakai kedua
+  it('harus menyimpan token di Redis dengan key signed_url:{token} dan TTL 900s', async () => {
+    const token = await generateSignedToken('ttl-file.json');
+    expect(mockRedis.set).toHaveBeenCalledWith(
+      `signed_url:${token}`,
+      JSON.stringify({ fileName: 'ttl-file.json' }),
+      'EX',
+      900
+    );
+  });
+
+  it('token yang sudah dipakai tidak bisa dipakai lagi (GETDEL one-time)', async () => {
+    const token = await generateSignedToken('test-file2.json');
+    await consumeSignedToken(token); // pakai pertama
+    const result = await consumeSignedToken(token); // pakai kedua
     expect(result).toBeNull();
   });
 
-  it('token yang tidak ada harus return null', () => {
-    expect(consumeSignedToken('invalid-token-xyz')).toBeNull();
+  it('token yang tidak ada harus return null', async () => {
+    expect(await consumeSignedToken('invalid-token-xyz')).toBeNull();
   });
 });
 

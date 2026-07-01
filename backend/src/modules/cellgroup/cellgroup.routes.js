@@ -2,6 +2,8 @@ const express = require('express');
 const multer = require('multer');
 const controller = require('./cellgroup.controller');
 const { authenticate } = require('../../middlewares/auth.middleware');
+const { handleValidationErrors } = require('../../middlewares/validation.middleware');
+const { createCellGroupValidation, updateCellGroupValidation } = require('./cellgroup.validation');
 
 const router = express.Router();
 
@@ -14,10 +16,10 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-router.post('/cell-groups', authenticate, controller.createCellGroup);
+router.post('/cell-groups', authenticate, createCellGroupValidation, handleValidationErrors, controller.createCellGroup);
 router.get('/cell-groups', authenticate, controller.listCellGroups);
 router.get('/cell-groups/:id', authenticate, controller.getCellGroupById);
-router.put('/cell-groups/:id', authenticate, controller.updateCellGroup);
+router.put('/cell-groups/:id', authenticate, updateCellGroupValidation, handleValidationErrors, controller.updateCellGroup);
 router.delete('/cell-groups/:id', authenticate, controller.deactivateCellGroup);
 router.get('/cell-groups/:id/members', authenticate, controller.getActiveMembers);
 router.post('/cell-groups/:id/members', authenticate, controller.addMember);

@@ -1,4 +1,4 @@
-const { login: loginService, logout: logoutService, resetAdminPassword: resetAdminPasswordService, AuthError } = require('./auth.service');
+const { login: loginService, logout: logoutService, refreshAccessToken: refreshAccessTokenService, resetAdminPassword: resetAdminPasswordService, AuthError } = require('./auth.service');
 const { findAllAdmins } = require('./auth.repository');
 
 const ACCESS_TOKEN_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 jam
@@ -58,6 +58,33 @@ async function logout(req, res) {
   }
 }
 
+async function refresh(req, res) {
+  const refreshToken = req.cookies?.refresh_token;
+
+  if (!refreshToken) {
+    return res.status(401).json({ message: 'Refresh token tidak ditemukan, silakan login' });
+  }
+
+  try {
+    const result = await refreshAccessTokenService(refreshToken);
+
+    // Set ulang access_token cookie (opsi sama seperti login)
+    res.cookie('access_token', result.accessToken, {
+      httpOnly: true,
+      maxAge: ACCESS_TOKEN_MAX_AGE_MS,
+      sameSite: 'strict',
+    });
+
+    return res.status(200).json({ message: 'Access token diperbarui' });
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return res.status(err.statusCode).json({ message: err.message });
+    }
+    console.error('Refresh error:', err);
+    return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+}
+
 async function listAdmins(req, res) {
   try {
     const admins = await findAllAdmins();
@@ -91,4 +118,4 @@ async function resetAdminPassword(req, res) {
   }
 }
 
-module.exports = { login, logout, listAdmins, resetAdminPassword };
+module.exports = { login, logout, refresh, listAdmins, resetAdminPassword };

@@ -150,14 +150,31 @@ async function updateSkor(jemaatId, newSkor, newStatus, isNonCg) {
  * - is_new_member = false (grace period sudah selesai)
  * @returns {Promise<Array<object>>}
  */
-async function getJemaatForScoring() {
+async function getJemaatForScoring({ limit, offset } = {}) {
   const pool = getPool();
+
+  // Tanpa limit → perilaku lama (ambil semua). Dengan limit/offset →
+  // paginasi untuk pemrosesan per-chunk (audit item 6).
+  if (limit === undefined || limit === null) {
+    const [rows] = await pool.query(
+      `SELECT id, skor_keaktifan, status_keaktifan, is_non_cg, is_new_member
+       FROM jemaat
+       WHERE is_active = TRUE
+         AND deleted_at IS NULL
+         AND is_new_member = FALSE`
+    );
+    return rows;
+  }
+
   const [rows] = await pool.query(
     `SELECT id, skor_keaktifan, status_keaktifan, is_non_cg, is_new_member
      FROM jemaat
      WHERE is_active = TRUE
        AND deleted_at IS NULL
-       AND is_new_member = FALSE`
+       AND is_new_member = FALSE
+     ORDER BY id ASC
+     LIMIT :limit OFFSET :offset`,
+    { limit: Number(limit), offset: Number(offset) }
   );
   return rows;
 }

@@ -1,5 +1,6 @@
 const { getPool } = require('../../config/database');
 const { encrypt, decrypt, encryptJson, decryptJson } = require('../../utils/encryption.util');
+const { hashPhone } = require('../../utils/hash.util');
 
 const SENSITIVE_FIELDS = ['no_hp', 'alamat', 'media_sosial'];
 const DATE_ONLY_COLUMNS = ['tgl_lahir', 'tgl_bergabung', 'new_member_until'];
@@ -69,12 +70,12 @@ async function create(data) {
   const [result] = await pool.query(
     `INSERT INTO jemaat (
       nama, tgl_lahir, jenis_kelamin,
-      no_hp, no_hp_iv, alamat, alamat_iv, media_sosial, media_sosial_iv,
+      no_hp, no_hp_iv, no_hp_hash, alamat, alamat_iv, media_sosial, media_sosial_iv,
       tgl_bergabung, is_active, is_new_member, new_member_until,
       is_non_cg, skor_keaktifan, status_keaktifan
     ) VALUES (
       :nama, :tglLahir, :jenisKelamin,
-      :noHp, :noHpIv, :alamat, :alamatIv, :mediaSosial, :mediaSosialIv,
+      :noHp, :noHpIv, :noHpHash, :alamat, :alamatIv, :mediaSosial, :mediaSosialIv,
       :tglBergabung, TRUE, TRUE, :newMemberUntil,
       TRUE, 0, 'BELUM_CUKUP_DATA'
     )`,
@@ -84,6 +85,7 @@ async function create(data) {
       jenisKelamin: data.jenis_kelamin,
       noHp: noHpEnc ? noHpEnc.ciphertext : null,
       noHpIv: noHpEnc ? noHpEnc.iv : null,
+      noHpHash: data.no_hp ? hashPhone(data.no_hp) : null,
       alamat: alamatEnc ? alamatEnc.ciphertext : null,
       alamatIv: alamatEnc ? alamatEnc.iv : null,
       mediaSosial: mediaSosialEnc ? mediaSosialEnc.ciphertext : null,
@@ -142,9 +144,10 @@ async function update(id, updates) {
 
   if (updates.no_hp !== undefined) {
     const enc = updates.no_hp ? encrypt(updates.no_hp) : null;
-    setClauses.push('no_hp = :noHp', 'no_hp_iv = :noHpIv');
+    setClauses.push('no_hp = :noHp', 'no_hp_iv = :noHpIv', 'no_hp_hash = :noHpHash');
     params.noHp = enc ? enc.ciphertext : null;
     params.noHpIv = enc ? enc.iv : null;
+    params.noHpHash = updates.no_hp ? hashPhone(updates.no_hp) : null;
   }
 
   if (updates.alamat !== undefined) {
@@ -191,24 +194,16 @@ async function findDuplicateCandidatesByNameAndBirthdate(nama, tglLahir) {
 
 async function findDuplicateCandidatesByPhone(noHpPlaintext) {
   const pool = getPool();
+  // Audit item 5: pencarian via kolom ber-index no_hp_hash, bukan
+  // full-scan + dekripsi massal. Hash dihitung dengan normalisasi yang
+  // sama seperti saat create/update sehingga pencocokan konsisten.
   const [rows] = await pool.query(
-    `SELECT id, nama, no_hp, no_hp_iv FROM jemaat
-     WHERE no_hp IS NOT NULL AND no_hp_iv IS NOT NULL AND deleted_at IS NULL`
+    `SELECT id, nama FROM jemaat
+     WHERE no_hp_hash = :hash AND deleted_at IS NULL`,
+    { hash: hashPhone(noHpPlaintext) }
   );
 
-  const matches = [];
-  for (const row of rows) {
-    try {
-      const decrypted = decrypt(row.no_hp, row.no_hp_iv);
-      if (decrypted === noHpPlaintext) {
-        matches.push({ id: row.id, nama: row.nama });
-      }
-    } catch (err) {
-      // Skip baris yang gagal didekripsi (data korup/IV tidak cocok)
-    }
-  }
-
-  return matches;
+  return rows;
 }
 
 async function checkDependencies(jemaatId) {

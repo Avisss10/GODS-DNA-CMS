@@ -18,12 +18,12 @@ describe('Database Schema (schema.sql)', () => {
     'users', 'jemaat', 'cell_group', 'cell_group_members', 'cg_meeting',
     'cg_meeting_photos', 'cg_absensi', 'volunteer_jenis', 'volunteer_members',
     'event', 'event_volunteer_needs', 'event_volunteer', 'event_attendances',
-    'event_kehadiran', 'audit_logs',
+    'event_kehadiran', 'audit_logs', 'notifications',
   ];
 
-  it('harus mendefinisikan tepat 15 CREATE TABLE', () => {
+  it('harus mendefinisikan tepat 16 CREATE TABLE', () => {
       const matches = sql.match(/^CREATE TABLE \w+\s*\(/gm) || [];
-      expect(matches.length).toBe(15);
+      expect(matches.length).toBe(16);
     });
 
   tables.forEach((table) => {
@@ -33,9 +33,9 @@ describe('Database Schema (schema.sql)', () => {
     });
   });
 
-  it('harus mendefinisikan tepat 23 FOREIGN KEY (sesuai LRS)', () => {
+  it('harus mendefinisikan tepat 24 FOREIGN KEY (sesuai LRS)', () => {
     const matches = sql.match(/FOREIGN KEY/g) || [];
-    expect(matches.length).toBe(23);
+    expect(matches.length).toBe(24);
   });
 
   describe('users', () => {

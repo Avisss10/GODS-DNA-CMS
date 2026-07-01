@@ -3,7 +3,8 @@ jest.mock('../../../src/config/redis');
 
 const { verifyAccessToken } = require('../../../src/utils/jwt.util');
 const { getRedisClient } = require('../../../src/config/redis');
-const { authenticate, requireRole } = require('../../../src/middlewares/auth.middleware');
+const authMiddleware = require('../../../src/middlewares/auth.middleware');
+const { authenticate } = authMiddleware;
 
 describe('auth.middleware — authenticate (Unit Test)', () => {
   let req, res, next, mockRedis;
@@ -72,41 +73,8 @@ describe('auth.middleware — authenticate (Unit Test)', () => {
   });
 });
 
-describe('auth.middleware — requireRole (Unit Test)', () => {
-  let req, res, next;
-
-  beforeEach(() => {
-    req = {};
-    res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn().mockReturnThis(),
-    };
-    next = jest.fn();
-  });
-
-  it('harus 401 jika req.user belum di-attach (belum lewat authenticate)', () => {
-    const middleware = requireRole('LEADER');
-    middleware(req, res, next);
-
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it('harus 403 jika peran user tidak termasuk allowedRoles', () => {
-    req.user = { userId: 1, peran: 'ADMIN' };
-    const middleware = requireRole('LEADER');
-    middleware(req, res, next);
-
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it('harus panggil next() jika peran user termasuk allowedRoles', () => {
-    req.user = { userId: 1, peran: 'LEADER' };
-    const middleware = requireRole('LEADER', 'ADMIN');
-    middleware(req, res, next);
-
-    expect(next).toHaveBeenCalled();
-    expect(res.status).not.toHaveBeenCalled();
+describe('auth.middleware — requireRole sudah dihapus (single source of truth)', () => {
+  it('tidak boleh lagi mengekspor requireRole (pindah ke role.middleware)', () => {
+    expect(authMiddleware.requireRole).toBeUndefined();
   });
 });
