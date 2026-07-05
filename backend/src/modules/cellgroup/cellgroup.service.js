@@ -5,8 +5,9 @@ const meetingRepository = require('./cellgroup-meeting.repository');
 const { compressToTargetSize } = require('./image-compression.util');
 const { recordAuditLog } = require('../auditlog/auditlog.repository');
 
-const MAX_PHOTOS_PER_MEETING = 10; // BAGIAN 3.3
-const UPLOAD_DIR = path.join(__dirname, '../../../uploads/cg-meeting-photos');
+const MAX_PHOTOS_PER_MEETING = 5; // BAGIAN 3.3 — diturunkan dari 10 ke 5
+const UPLOADS_ROOT = path.resolve(__dirname, '../../../uploads');
+const UPLOAD_DIR = path.join(UPLOADS_ROOT, 'cg-meeting-photos');
 
 class CellGroupError extends Error {
   constructor(message, statusCode) {
@@ -179,6 +180,97 @@ async function addPhotoToMeeting(meetingId, fileBuffer, { actorUserId = null } =
 }
 
 /**
+ * Resolve file_path dari DB (contoh: "/uploads/cg-meeting-photos/x.jpg")
+ * menjadi path absolut di disk, dengan pengecekan anti path-traversal:
+ * hasil resolve WAJIB berada di dalam folder uploads. Jika tidak
+ * (misal record dimanipulasi menjadi "../../.env"), dilempar 400.
+ *
+ * @param {string} filePathFromDb
+ * @returns {string} path absolut yang sudah tervalidasi
+ * @throws {CellGroupError} 400 jika path keluar dari folder uploads
+ */
+function resolvePhotoPath(filePathFromDb) {
+  const relative = String(filePathFromDb || '').replace(/^[/\\]+/, '');
+  const absolute = path.resolve(path.join(__dirname, '../../../'), relative);
+
+  if (!absolute.startsWith(UPLOADS_ROOT + path.sep)) {
+    throw new CellGroupError('Path file foto tidak valid', 400);
+  }
+  return absolute;
+}
+
+/**
+ * Daftar foto sebuah meeting (id, file_size_kb, uploaded_by, created_at).
+ *
+ * @param {number} meetingId
+ * @returns {Promise<Array<object>>}
+ * @throws {CellGroupError} 404 jika meeting tidak ditemukan
+ */
+async function listMeetingPhotos(meetingId) {
+  const meeting = await meetingRepository.findMeetingById(meetingId);
+  if (!meeting) {
+    throw new CellGroupError('Meeting tidak ditemukan', 404);
+  }
+  return meetingRepository.findPhotosByMeetingId(meetingId);
+}
+
+/**
+ * Ambil path absolut file foto untuk di-stream oleh controller.
+ *
+ * @param {number} photoId
+ * @returns {Promise<{ absolutePath: string, contentType: string }>}
+ * @throws {CellGroupError} 404 jika record/file tidak ada, 400 jika path tidak valid
+ */
+async function getPhotoFile(photoId) {
+  const photo = await meetingRepository.findPhotoById(photoId);
+  if (!photo) {
+    throw new CellGroupError('Foto tidak ditemukan', 404);
+  }
+
+  const absolutePath = resolvePhotoPath(photo.file_path);
+  if (!fs.existsSync(absolutePath)) {
+    throw new CellGroupError('File foto tidak ditemukan di server', 404);
+  }
+
+  const contentTypeByExt = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
+  const contentType = contentTypeByExt[path.extname(absolutePath).toLowerCase()] || 'application/octet-stream';
+
+  return { absolutePath, contentType };
+}
+
+/**
+ * Hapus foto meeting: record DB + file di disk, catat audit log.
+ * File yang sudah hilang dari disk tidak menggagalkan penghapusan record.
+ *
+ * @param {number} photoId
+ * @param {object} options
+ * @param {number} options.actorUserId
+ * @throws {CellGroupError} 404 jika record tidak ada
+ */
+async function deletePhoto(photoId, { actorUserId = null } = {}) {
+  const photo = await meetingRepository.findPhotoById(photoId);
+  if (!photo) {
+    throw new CellGroupError('Foto tidak ditemukan', 404);
+  }
+
+  const absolutePath = resolvePhotoPath(photo.file_path);
+  if (fs.existsSync(absolutePath)) {
+    fs.unlinkSync(absolutePath);
+  }
+
+  await meetingRepository.deleteMeetingPhoto(photoId);
+
+  await recordAuditLog({
+    userId: actorUserId,
+    aksi: 'DELETE_MEETING_PHOTO',
+    modul: 'CELL_GROUP',
+    objectId: photo.meeting_id,
+    dataSebelum: { photoId, filePath: photo.file_path, fileSizeKb: photo.file_size_kb },
+    dataSesudah: null,
+  });
+}
+
+/**
  * Menyimpan absensi untuk seluruh anggota yang hadir di sebuah
  * meeting sekaligus (BAGIAN 3.4 langkah 2-3).
  *
@@ -277,6 +369,35 @@ async function deactivateCellGroup(cgId, { actorUserId = null } = {}) {
 }
 
 /**
+ * Reaktivasi CG yang sudah dinonaktifkan (kebalikan deactivateCellGroup).
+ *
+ * @param {number} cgId
+ * @param {object} options
+ * @throws {CellGroupError} 404 jika CG tidak pernah ada, 409 jika sudah aktif
+ */
+async function activateCellGroup(cgId, { actorUserId = null } = {}) {
+  const cg = await cgRepository.findByIdIncludingDeleted(cgId);
+  if (!cg) {
+    throw new CellGroupError('Cell Group tidak ditemukan', 404);
+  }
+
+  if (cg.is_active) {
+    throw new CellGroupError('Cell Group sudah aktif', 409);
+  }
+
+  await cgRepository.activate(cgId);
+
+  await recordAuditLog({
+    userId: actorUserId,
+    aksi: 'ACTIVATE_CG',
+    modul: 'CELL_GROUP',
+    objectId: cgId,
+    dataSebelum: { nama: cg.nama, is_active: cg.is_active },
+    dataSesudah: { is_active: true },
+  });
+}
+
+/**
  * Update data meeting (judul, jenis, waktu_mulai, waktu_selesai, catatan).
  * Validasi bahwa waktu_selesai tetap setelah waktu_mulai setelah update.
  *
@@ -331,11 +452,15 @@ module.exports = {
   createCellGroup,
   updateCellGroup,
   deactivateCellGroup,
+  activateCellGroup,
   addMemberToCg,
   removeMemberFromCg,
   createMeeting,
   updateMeeting,
   addPhotoToMeeting,
+  listMeetingPhotos,
+  getPhotoFile,
+  deletePhoto,
   submitAbsensi,
   MAX_PHOTOS_PER_MEETING,
 };

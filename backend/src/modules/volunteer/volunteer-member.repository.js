@@ -1,4 +1,5 @@
 const { getPool } = require('../../config/database');
+const { decryptOptional } = require('../../utils/encryption.util');
 
 /**
  * Mendaftarkan jemaat ke sebuah jenis volunteer (BAGIAN keputusan
@@ -86,8 +87,11 @@ async function findActiveByJemaat(jemaatId) {
  */
 async function findActiveByType(volunteerTypeId) {
   const pool = getPool();
+  // j.nama tersimpan sebagai ciphertext (migration 005) — dekripsi
+  // di level aplikasi memakai j.nama_iv sebelum dikembalikan.
   const [rows] = await pool.query(
-    `SELECT vm.id, j.id AS jemaat_id, j.nama, j.is_new_member
+    `SELECT vm.id, j.id AS jemaat_id, j.nama, j.nama_iv, j.is_new_member,
+            j.skor_keaktifan, j.status_keaktifan
      FROM volunteer_members vm
      JOIN jemaat j ON vm.jemaat_id = j.id
      WHERE vm.volunteer_type_id = :volunteerTypeId
@@ -95,7 +99,10 @@ async function findActiveByType(volunteerTypeId) {
        AND j.deleted_at IS NULL`,
     { volunteerTypeId }
   );
-  return rows;
+  return rows.map(({ nama_iv, ...row }) => ({
+    ...row,
+    nama: decryptOptional(row.nama, nama_iv),
+  }));
 }
 
 module.exports = {

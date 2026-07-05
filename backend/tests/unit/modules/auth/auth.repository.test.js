@@ -99,6 +99,22 @@ describe('auth.repository — updateAktif (Unit Test)', () => {
   });
 });
 
+describe('auth.repository — findAllUsers (Unit Test)', () => {
+  it('harus mengembalikan semua user (LEADER + ADMIN) tanpa filter peran', async () => {
+    const mockRows = [
+      { id: 1, username: 'leader1', peran: 'LEADER', aktif: true, last_login_at: null },
+      { id: 2, username: 'admin1', peran: 'ADMIN', aktif: true, last_login_at: null },
+    ];
+    const mockPool = { query: jest.fn().mockResolvedValue([mockRows]) };
+    getPool.mockReturnValue(mockPool);
+
+    const result = await repo.findAllUsers();
+
+    expect(result).toEqual(mockRows);
+    expect(mockPool.query.mock.calls[0][0]).not.toMatch(/WHERE peran/);
+  });
+});
+
 describe('auth.repository — countActiveLeaders (Unit Test)', () => {
   it('harus mengembalikan jumlah leader aktif sebagai number', async () => {
     const mockPool = { query: jest.fn().mockResolvedValue([[{ total: 2 }]]) };

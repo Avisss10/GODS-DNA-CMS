@@ -76,3 +76,71 @@ describe('event-volunteer.repository — findAssignedByJenis (Unit Test)', () =>
     expect(result).toEqual(mockRows);
   });
 });
+
+describe('event-volunteer.repository — assignWithConnection (Unit Test)', () => {
+  it('harus INSERT memakai connection yang diberikan, bukan pool', async () => {
+    const mockConnection = { query: jest.fn().mockResolvedValue([{ insertId: 9 }]) };
+
+    const id = await repo.assignWithConnection(mockConnection, { event_id: 1, jemaat_id: 2, jenis_id: 3 });
+
+    expect(id).toBe(9);
+    expect(mockConnection.query.mock.calls[0][0]).toMatch(/INSERT INTO event_volunteer/);
+  });
+});
+
+describe('event-volunteer.repository — countActiveByEventAndJenis (Unit Test)', () => {
+  it('harus menghitung jumlah penugasan AKTIF memakai executor yang diberikan', async () => {
+    const mockExecutor = { query: jest.fn().mockResolvedValue([[{ total: 3 }]]) };
+
+    const total = await repo.countActiveByEventAndJenis(mockExecutor, 1, 3);
+
+    expect(total).toBe(3);
+    expect(mockExecutor.query.mock.calls[0][0]).toMatch(/status = 'AKTIF'/);
+  });
+
+  it('harus memakai FOR UPDATE agar membaca data ter-commit terbaru di dalam transaksi', async () => {
+    const mockExecutor = { query: jest.fn().mockResolvedValue([[{ total: 0 }]]) };
+
+    await repo.countActiveByEventAndJenis(mockExecutor, 1, 3);
+
+    expect(mockExecutor.query.mock.calls[0][0]).toMatch(/FOR UPDATE/);
+  });
+});
+
+describe('event-volunteer.repository — countTugas30HariBatch (Unit Test)', () => {
+  it('harus mengembalikan peta jemaat_id → jumlah tugas 30 hari terakhir', async () => {
+    const mockRows = [{ jemaat_id: 2, total: 5 }, { jemaat_id: 4, total: 1 }];
+    const mockPool = { query: jest.fn().mockResolvedValue([mockRows]) };
+    getPool.mockReturnValue(mockPool);
+
+    const result = await repo.countTugas30HariBatch([2, 4]);
+
+    expect(result).toEqual({ 2: 5, 4: 1 });
+    expect(mockPool.query.mock.calls[0][0]).toMatch(/INTERVAL 30 DAY/);
+  });
+
+  it('harus mengembalikan object kosong tanpa query jika jemaatIds kosong', async () => {
+    const mockPool = { query: jest.fn() };
+    getPool.mockReturnValue(mockPool);
+
+    const result = await repo.countTugas30HariBatch([]);
+
+    expect(result).toEqual({});
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('event-volunteer.repository — findConflictingJemaatIds (Unit Test)', () => {
+  it('harus mengembalikan jemaat_id dengan penugasan AKTIF yang waktunya overlap', async () => {
+    const mockRows = [{ jemaat_id: 5 }, { jemaat_id: 6 }];
+    const mockPool = { query: jest.fn().mockResolvedValue([mockRows]) };
+    getPool.mockReturnValue(mockPool);
+
+    const result = await repo.findConflictingJemaatIds({
+      waktuMulai: '2026-06-01 09:00:00', waktuSelesai: '2026-06-01 11:00:00', excludeEventId: 1,
+    });
+
+    expect(result).toEqual([5, 6]);
+    expect(mockPool.query.mock.calls[0][0]).toMatch(/status = 'AKTIF'/);
+  });
+});

@@ -49,8 +49,8 @@ function buildTlsOptions() {
  * Membuat (atau mengembalikan) Redis client tunggal (singleton),
  * mengikuti pola yang sama dengan src/config/database.js.
  * Dipakai untuk: failed_login_count, session/token blacklist,
- * refresh token storage (BAGIAN 1.1), dan Bull queue (BAGIAN 0)
- * di modul-modul berikutnya.
+ * refresh token storage (BAGIAN 1.1), signed URL laporan,
+ * daftar IP dikenal per user, dan deduplikasi notifikasi.
  */
 function getRedisClient() {
   if (client) {

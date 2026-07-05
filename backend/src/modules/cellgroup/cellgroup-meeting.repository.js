@@ -1,4 +1,5 @@
 const { getPool } = require('../../config/database');
+const { decryptOptional } = require('../../utils/encryption.util');
 
 /**
  * Membuat meeting baru untuk sebuah CG (BAGIAN 3.3 langkah 3).
@@ -68,6 +69,49 @@ async function countMeetingPhotos(meetingId) {
 }
 
 /**
+ * Mengambil daftar foto sebuah meeting (tanpa file_path — konsumen
+ * list tidak perlu tahu lokasi file di disk).
+ *
+ * @param {number} meetingId
+ * @returns {Promise<Array<object>>}
+ */
+async function findPhotosByMeetingId(meetingId) {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    `SELECT id, file_size_kb, uploaded_by, uploaded_at AS created_at
+     FROM cg_meeting_photos
+     WHERE meeting_id = :meetingId
+     ORDER BY uploaded_at ASC`,
+    { meetingId }
+  );
+  return rows;
+}
+
+/**
+ * Mencari satu foto by id (termasuk file_path untuk streaming/hapus).
+ * @param {number} id
+ * @returns {Promise<object|null>}
+ */
+async function findPhotoById(id) {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    'SELECT * FROM cg_meeting_photos WHERE id = :id LIMIT 1',
+    { id }
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Menghapus record foto meeting. Penghapusan file di disk adalah
+ * tanggung jawab service layer.
+ * @param {number} id
+ */
+async function deleteMeetingPhoto(id) {
+  const pool = getPool();
+  await pool.query('DELETE FROM cg_meeting_photos WHERE id = :id', { id });
+}
+
+/**
  * Mengambil anggota CG yang aktif PADA SAAT meeting berlangsung
  * (BAGIAN 3.4 langkah 1, dikutip persis):
  * "left_at IS NULL ATAU left_at > waktu meeting"
@@ -83,8 +127,10 @@ async function countMeetingPhotos(meetingId) {
  */
 async function findActiveMembersAtMeetingTime(cgId, waktuMeeting) {
   const pool = getPool();
+  // j.nama tersimpan sebagai ciphertext (migration 005) — dekripsi
+  // di level aplikasi memakai j.nama_iv sebelum dikembalikan.
   const [rows] = await pool.query(
-    `SELECT j.id, j.nama
+    `SELECT j.id, j.nama, j.nama_iv
      FROM cell_group_members cgm
      JOIN jemaat j ON cgm.jemaat_id = j.id
      WHERE cgm.cg_id = :cgId
@@ -92,7 +138,10 @@ async function findActiveMembersAtMeetingTime(cgId, waktuMeeting) {
        AND j.deleted_at IS NULL`,
     { cgId, waktuMeeting }
   );
-  return rows;
+  return rows.map(({ nama_iv, ...row }) => ({
+    ...row,
+    nama: decryptOptional(row.nama, nama_iv),
+  }));
 }
 
 /**
@@ -122,13 +171,16 @@ async function upsertAbsensi(meetingId, jemaatId, hadir) {
 async function findAbsensiByMeeting(meetingId) {
   const pool = getPool();
   const [rows] = await pool.query(
-    `SELECT ca.jemaat_id, j.nama, ca.hadir
+    `SELECT ca.jemaat_id, j.nama, j.nama_iv, ca.hadir
      FROM cg_absensi ca
      JOIN jemaat j ON ca.jemaat_id = j.id
      WHERE ca.meeting_id = :meetingId`,
     { meetingId }
   );
-  return rows;
+  return rows.map(({ nama_iv, ...row }) => ({
+    ...row,
+    nama: decryptOptional(row.nama, nama_iv),
+  }));
 }
 
 /**
@@ -195,6 +247,9 @@ module.exports = {
   findMeetingsByCgId,
   addMeetingPhoto,
   countMeetingPhotos,
+  findPhotosByMeetingId,
+  findPhotoById,
+  deleteMeetingPhoto,
   findActiveMembersAtMeetingTime,
   upsertAbsensi,
   findAbsensiByMeeting,

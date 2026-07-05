@@ -18,7 +18,7 @@ const describeIfReady = hasFullConfig ? describe : describe.skip;
 describeIfReady('Cell Group Endpoints — REST HTTP Test (server aktif)', () => {
   let server;
   let cookieHeader;
-  let leaderId, memberId, cgId, meetingId;
+  let leaderId, memberId, cgId, meetingId, uploadedPhotoId;
 
   const testUsername = `test_http_cg_${Date.now()}`;
   const testPassword = 'PasswordCgHttp123!';
@@ -144,6 +144,27 @@ describeIfReady('Cell Group Endpoints — REST HTTP Test (server aktif)', () => 
     expect(res.status).toBe(201);
   }, 10000);
 
+  it('POST /api/cell-groups/:id/members harus 400 jika jemaatId bukan integer positif', async () => {
+    const res = await request(server)
+      .post(`/api/cell-groups/${cgId}/members`)
+      .set('Cookie', cookieHeader)
+      .send({ jemaatId: 'abc' });
+
+    expect(res.status).toBe(400);
+  }, 10000);
+
+  it('POST /api/cell-groups/:id/meetings harus 400 jika jenis di luar ONLINE/OFFLINE', async () => {
+    const res = await request(server)
+      .post(`/api/cell-groups/${cgId}/meetings`)
+      .set('Cookie', cookieHeader)
+      .send({
+        judul: 'Meeting Invalid', jenis: 'HYBRID',
+        waktuMulai: '2026-06-20 19:00:00', waktuSelesai: '2026-06-20 21:00:00',
+      });
+
+    expect(res.status).toBe(400);
+  }, 10000);
+
   it('POST /api/cell-groups/:id/members harus 409 jika anggota sudah ada', async () => {
     const res = await request(server)
       .post(`/api/cell-groups/${cgId}/members`)
@@ -197,6 +218,72 @@ describeIfReady('Cell Group Endpoints — REST HTTP Test (server aktif)', () => 
     expect(res.body.sizeKb).toBeLessThanOrEqual(500);
   }, 30000);
 
+  it('GET /api/cell-groups/meetings/:meetingId/photos harus mengembalikan daftar foto', async () => {
+    const res = await request(server)
+      .get(`/api/cell-groups/meetings/${meetingId}/photos`)
+      .set('Cookie', cookieHeader);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThanOrEqual(1);
+    expect(res.body[0]).toHaveProperty('id');
+    expect(res.body[0]).toHaveProperty('file_size_kb');
+    expect(res.body[0]).toHaveProperty('uploaded_by');
+    expect(res.body[0]).toHaveProperty('created_at');
+    expect(res.body[0]).not.toHaveProperty('file_path');
+    uploadedPhotoId = res.body[0].id;
+  }, 10000);
+
+  it('GET /api/cell-groups/photos/:photoId harus stream file gambar', async () => {
+    const res = await request(server)
+      .get(`/api/cell-groups/photos/${uploadedPhotoId}`)
+      .set('Cookie', cookieHeader);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('image/jpeg');
+    expect(res.body.length).toBeGreaterThan(0);
+  }, 10000);
+
+  it('GET /api/cell-groups/photos/:photoId harus 401 tanpa autentikasi', async () => {
+    const res = await request(server).get(`/api/cell-groups/photos/${uploadedPhotoId}`);
+    expect(res.status).toBe(401);
+  }, 10000);
+
+  it('DELETE /api/cell-groups/photos/:photoId harus menghapus record + file', async () => {
+    const res = await request(server)
+      .delete(`/api/cell-groups/photos/${uploadedPhotoId}`)
+      .set('Cookie', cookieHeader);
+
+    expect(res.status).toBe(200);
+
+    const afterDelete = await request(server)
+      .get(`/api/cell-groups/photos/${uploadedPhotoId}`)
+      .set('Cookie', cookieHeader);
+    expect(afterDelete.status).toBe(404);
+  }, 10000);
+
+  it('POST /api/cell-groups/meetings/:meetingId/photos harus 400 untuk mimetype non-gambar', async () => {
+    const res = await request(server)
+      .post(`/api/cell-groups/meetings/${meetingId}/photos`)
+      .set('Cookie', cookieHeader)
+      .attach('photo', Buffer.from('bukan gambar sama sekali'), 'dokumen.txt');
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Tipe file tidak didukung. Hanya menerima JPEG, PNG, atau WebP');
+  }, 15000);
+
+  it('POST /api/cell-groups/meetings/:meetingId/photos harus 400 untuk file lebih dari 10MB', async () => {
+    const bigBuffer = Buffer.alloc(11 * 1024 * 1024, 1);
+
+    const res = await request(server)
+      .post(`/api/cell-groups/meetings/${meetingId}/photos`)
+      .set('Cookie', cookieHeader)
+      .attach('photo', bigBuffer, 'besar.jpg');
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Ukuran file terlalu besar (maksimal 10MB)');
+  }, 30000);
+
   it('GET /api/cell-groups/meetings/:meetingId/active-members harus mengembalikan leader dan member', async () => {
     const res = await request(server)
       .get(`/api/cell-groups/meetings/${meetingId}/active-members`)
@@ -205,6 +292,15 @@ describeIfReady('Cell Group Endpoints — REST HTTP Test (server aktif)', () => 
     expect(res.status).toBe(200);
     expect(res.body.some((m) => m.id === leaderId)).toBe(true);
     expect(res.body.some((m) => m.id === memberId)).toBe(true);
+  }, 10000);
+
+  it('POST /api/cell-groups/meetings/:meetingId/absensi harus 400 jika absensi bukan array valid', async () => {
+    const res = await request(server)
+      .post(`/api/cell-groups/meetings/${meetingId}/absensi`)
+      .set('Cookie', cookieHeader)
+      .send({ absensi: [{ jemaatId: 'abc', hadir: 'ya' }] });
+
+    expect(res.status).toBe(400);
   }, 10000);
 
   it('POST /api/cell-groups/meetings/:meetingId/absensi harus 200 dan menyimpan absensi', async () => {
@@ -233,6 +329,47 @@ describeIfReady('Cell Group Endpoints — REST HTTP Test (server aktif)', () => 
       .set('Cookie', cookieHeader);
     expect(membersRes.body.some((m) => m.id === memberId)).toBe(false);
   }, 10000);
+
+  describe('PATCH /api/cell-groups/:id/activate (reaktivasi)', () => {
+    it('409 jika CG masih aktif', async () => {
+      const res = await request(server)
+        .patch(`/api/cell-groups/${cgId}/activate`)
+        .set('Cookie', cookieHeader);
+
+      expect(res.status).toBe(409);
+      expect(res.body.message).toBe('Cell Group sudah aktif');
+    }, 10000);
+
+    it('404 jika CG tidak pernah ada', async () => {
+      const res = await request(server)
+        .patch('/api/cell-groups/99999999/activate')
+        .set('Cookie', cookieHeader);
+
+      expect(res.status).toBe(404);
+    }, 10000);
+
+    it('200 untuk CG nonaktif: kembali muncul via GET /cell-groups/:id', async () => {
+      // Nonaktifkan dulu: keluarkan leader (anggota terakhir) → DELETE CG
+      await request(server)
+        .delete(`/api/cell-groups/${cgId}/members/${leaderId}`)
+        .set('Cookie', cookieHeader);
+      const delRes = await request(server)
+        .delete(`/api/cell-groups/${cgId}`)
+        .set('Cookie', cookieHeader);
+      expect(delRes.status).toBe(200);
+
+      const activateRes = await request(server)
+        .patch(`/api/cell-groups/${cgId}/activate`)
+        .set('Cookie', cookieHeader);
+      expect(activateRes.status).toBe(200);
+
+      const getRes = await request(server)
+        .get(`/api/cell-groups/${cgId}`)
+        .set('Cookie', cookieHeader);
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.is_active).toBeTruthy();
+    }, 15000);
+  });
 });
 
 if (!hasFullConfig) {

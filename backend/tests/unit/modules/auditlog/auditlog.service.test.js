@@ -1,7 +1,13 @@
 jest.mock('../../../../src/modules/auditlog/auditlog.repository');
+jest.mock('../../../../src/config/redis');
+jest.mock('../../../../src/modules/notification/notification.stub');
 const auditlogRepository = require('../../../../src/modules/auditlog/auditlog.repository');
+const { getRedisClient } = require('../../../../src/config/redis');
+const { notifyLeaders } = require('../../../../src/modules/notification/notification.stub');
 const { verifyHmac, listAuditLogs, getAuditLogById } = require('../../../../src/modules/auditlog/auditlog.service');
 const crypto = require('crypto');
+
+let mockRedis;
 
 // Helper: buat row valid dengan HMAC yang benar
 function makeValidRow(overrides = {}) {
@@ -44,6 +50,10 @@ function makeValidRow(overrides = {}) {
 beforeEach(() => {
   jest.clearAllMocks();
   process.env.AUDIT_HMAC_SECRET = 'test-secret';
+  // Default: SET NX berhasil ('OK') = belum pernah dinotifikasi
+  mockRedis = { set: jest.fn().mockResolvedValue('OK') };
+  getRedisClient.mockReturnValue(mockRedis);
+  notifyLeaders.mockResolvedValue(undefined);
 });
 
 // ── verifyHmac ────────────────────────────────────────────────────
@@ -132,5 +142,87 @@ describe('auditlog.service — getAuditLogById (Unit Test)', () => {
     expect(result.id).toBe(1);
     expect(result.hmac_valid).toBe(true);
     expect(result.hmac_status).toBe('OK');
+  });
+});
+// ── Notifikasi AUDIT_TAMPERED ─────────────────────────────────────
+describe('auditlog.service — notifikasi AUDIT_TAMPERED (Unit Test)', () => {
+  it('listAuditLogs: baris POTENTIALLY_TAMPERED memicu notifyLeaders dengan id baris', async () => {
+    const row = makeValidRow({ id: 42 });
+    row.hmac_signature = 'tampered';
+    auditlogRepository.findAll.mockResolvedValue([row]);
+
+    await listAuditLogs({});
+
+    expect(mockRedis.set).toHaveBeenCalledWith('tamper_notified:42', '1', 'EX', 24 * 60 * 60, 'NX');
+    expect(notifyLeaders).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jenis: 'AUDIT_TAMPERED',
+        pesan: expect.stringContaining('id=42'),
+      })
+    );
+  });
+
+  it('listAuditLogs: baris valid TIDAK memicu notifikasi', async () => {
+    auditlogRepository.findAll.mockResolvedValue([makeValidRow()]);
+
+    await listAuditLogs({});
+
+    expect(notifyLeaders).not.toHaveBeenCalled();
+  });
+
+  it('dedup: jika key tamper_notified sudah ada (SET NX gagal), tidak kirim ulang', async () => {
+    mockRedis.set.mockResolvedValue(null); // NX gagal = sudah dinotifikasi
+    const row = makeValidRow({ id: 42 });
+    row.hmac_signature = 'tampered';
+    auditlogRepository.findAll.mockResolvedValue([row]);
+
+    await listAuditLogs({});
+
+    expect(notifyLeaders).not.toHaveBeenCalled();
+  });
+
+  it('getAuditLogById: baris tampered memicu notifikasi dan tetap mengembalikan data', async () => {
+    const row = makeValidRow({ id: 7 });
+    row.hmac_signature = 'tampered';
+    auditlogRepository.findById.mockResolvedValue(row);
+
+    const result = await getAuditLogById(7);
+
+    expect(result.hmac_status).toBe('POTENTIALLY_TAMPERED');
+    expect(notifyLeaders).toHaveBeenCalledWith(
+      expect.objectContaining({ jenis: 'AUDIT_TAMPERED' })
+    );
+  });
+
+  it('NO_SECRET (masalah konfigurasi) TIDAK memicu notifikasi tamper', async () => {
+    delete process.env.AUDIT_HMAC_SECRET;
+    auditlogRepository.findAll.mockResolvedValue([makeValidRow()]);
+
+    await listAuditLogs({});
+
+    expect(notifyLeaders).not.toHaveBeenCalled();
+  });
+
+  it('kegagalan Redis TIDAK membuat endpoint baca audit log error', async () => {
+    mockRedis.set.mockRejectedValue(new Error('Redis down'));
+    const row = makeValidRow({ id: 42 });
+    row.hmac_signature = 'tampered';
+    auditlogRepository.findAll.mockResolvedValue([row]);
+
+    const result = await listAuditLogs({});
+
+    expect(result).toHaveLength(1);
+    expect(result[0].hmac_status).toBe('POTENTIALLY_TAMPERED');
+  });
+
+  it('kegagalan notifyLeaders TIDAK membuat getAuditLogById error', async () => {
+    notifyLeaders.mockRejectedValue(new Error('Notif down'));
+    const row = makeValidRow({ id: 7 });
+    row.hmac_signature = 'tampered';
+    auditlogRepository.findById.mockResolvedValue(row);
+
+    const result = await getAuditLogById(7);
+
+    expect(result.id).toBe(7);
   });
 });

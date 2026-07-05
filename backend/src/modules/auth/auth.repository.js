@@ -119,6 +119,21 @@ async function findAllAdmins() {
   return rows;
 }
 
+/**
+ * Ambil semua user (LEADER + ADMIN) untuk halaman User Management —
+ * berbeda dari findAllAdmins yang khusus ADMIN saja (dipertahankan
+ * agar konsumen lama tidak berubah kontraknya).
+ * @returns {Promise<Array<object>>}
+ */
+async function findAllUsers() {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    `SELECT id, username, peran, aktif, last_login_at
+     FROM users ORDER BY peran ASC, username ASC`
+  );
+  return rows;
+}
+
 module.exports = {
   findByUsername,
   findById,
@@ -127,5 +142,6 @@ module.exports = {
   updateAktif,
   updatePassword,
   findAllAdmins,
+  findAllUsers,
   countActiveLeaders,
 };

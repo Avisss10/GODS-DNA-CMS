@@ -59,8 +59,8 @@ describe('volunteer-member.repository — findActiveByJemaat (Unit Test)', () =>
 });
 
 describe('volunteer-member.repository — findActiveByType (Unit Test)', () => {
-  it('harus mengembalikan daftar jemaat aktif untuk jenis volunteer tertentu', async () => {
-    const mockData = [{ jemaat_id: 10, nama: 'Budi', is_new_member: 0 }];
+  it('harus mengembalikan daftar jemaat aktif untuk jenis volunteer tertentu beserta skor_keaktifan', async () => {
+    const mockData = [{ jemaat_id: 10, nama: 'Budi', is_new_member: 0, skor_keaktifan: 80, status_keaktifan: 'AKTIF' }];
     const mockPool = { query: jest.fn().mockResolvedValue([mockData]) };
     getPool.mockReturnValue(mockPool);
 
@@ -68,5 +68,6 @@ describe('volunteer-member.repository — findActiveByType (Unit Test)', () => {
 
     expect(result).toEqual(mockData);
     expect(mockPool.query.mock.calls[0][0]).toMatch(/deleted_at IS NULL/);
+    expect(mockPool.query.mock.calls[0][0]).toMatch(/skor_keaktifan/);
   });
 });

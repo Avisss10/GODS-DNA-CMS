@@ -60,13 +60,43 @@ describeIfReady('Report Endpoints — REST HTTP Test (server aktif)', () => {
       expect(res.status).toBe(401);
     });
 
-    it('200 berhasil generate laporan jemaat', async () => {
+    it('200 dan mengirim file .xlsx (default format) berisi jumlah kolom sesuai jemaat', async () => {
       const res = await request(server)
         .get('/api/reports/jemaat')
-        .set('Cookie', cookieAdmin);
+        .set('Cookie', cookieAdmin)
+        .buffer(true)
+        .parse((response, callback) => {
+          const chunks = [];
+          response.on('data', (chunk) => chunks.push(chunk));
+          response.on('end', () => callback(null, Buffer.concat(chunks)));
+        });
+
       expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('async');
-      expect(res.body).toHaveProperty('data');
+      expect(res.headers['content-type']).toContain('spreadsheetml');
+      expect(res.headers['content-disposition']).toMatch(/\.xlsx"/);
+    });
+
+    it('200 dan mengirim file .pdf saat format=pdf', async () => {
+      const res = await request(server)
+        .get('/api/reports/jemaat?format=pdf')
+        .set('Cookie', cookieAdmin)
+        .buffer(true)
+        .parse((response, callback) => {
+          const chunks = [];
+          response.on('data', (chunk) => chunks.push(chunk));
+          response.on('end', () => callback(null, Buffer.concat(chunks)));
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('application/pdf');
+      expect(res.body.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    });
+
+    it('400 jika format tidak valid', async () => {
+      const res = await request(server)
+        .get('/api/reports/jemaat?format=csv')
+        .set('Cookie', cookieAdmin);
+      expect(res.status).toBe(400);
     });
   });
 
@@ -77,13 +107,12 @@ describeIfReady('Report Endpoints — REST HTTP Test (server aktif)', () => {
       expect(res.status).toBe(401);
     });
 
-    it('200 berhasil generate laporan kehadiran event', async () => {
+    it('200 berhasil generate laporan kehadiran event (default xlsx)', async () => {
       const res = await request(server)
         .get('/api/reports/event')
         .set('Cookie', cookieAdmin);
       expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('data');
-      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.headers['content-type']).toContain('spreadsheetml');
     });
   });
 
@@ -94,7 +123,7 @@ describeIfReady('Report Endpoints — REST HTTP Test (server aktif)', () => {
         .get('/api/reports/cg')
         .set('Cookie', cookieAdmin);
       expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.headers['content-type']).toContain('spreadsheetml');
     });
   });
 
@@ -105,7 +134,7 @@ describeIfReady('Report Endpoints — REST HTTP Test (server aktif)', () => {
         .get('/api/reports/volunteer')
         .set('Cookie', cookieAdmin);
       expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.headers['content-type']).toContain('spreadsheetml');
     });
   });
 
@@ -116,7 +145,7 @@ describeIfReady('Report Endpoints — REST HTTP Test (server aktif)', () => {
         .get('/api/reports/analytics')
         .set('Cookie', cookieAdmin);
       expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.headers['content-type']).toContain('spreadsheetml');
     });
   });
 

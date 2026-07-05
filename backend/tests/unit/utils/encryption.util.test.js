@@ -85,6 +85,62 @@ describe('encryption.util — encrypt & decrypt (Unit Test)', () => {
   });
 });
 
+describe('encryption.util — performa (Unit Test)', () => {
+  // Ambang batas 50ms per siklus encrypt+decrypt (BAB II §2.2.10, BAB III §3.3.4).
+  const AMBANG_BATAS_MS = 50;
+  const JUMLAH_ITERASI = 10;
+
+  // Kategori ukuran plaintext sesuai BAB II §2.2.10
+  const kategoriUkuran = [
+    { nama: 'kecil (< 50 karakter)', plaintext: 'x'.repeat(30) },
+    { nama: 'sedang (50–200 karakter)', plaintext: 'x'.repeat(120) },
+    { nama: 'besar (200–500 karakter)', plaintext: 'x'.repeat(400) },
+  ];
+
+  kategoriUkuran.forEach(({ nama, plaintext }) => {
+    it(`satu siklus encrypt+decrypt data ${nama} harus selesai < ${AMBANG_BATAS_MS}ms`, () => {
+      // Warm-up: siklus pertama bisa lebih lambat (inisialisasi modul crypto),
+      // tidak ikut diukur agar angka mencerminkan operasi normal.
+      const warmUp = encrypt(plaintext);
+      decrypt(warmUp.ciphertext, warmUp.iv);
+
+      const durasiMs = [];
+      let contohCiphertext = '';
+
+      for (let i = 0; i < JUMLAH_ITERASI; i += 1) {
+        const mulai = process.hrtime.bigint();
+        const { ciphertext, iv } = encrypt(plaintext);
+        const hasil = decrypt(ciphertext, iv);
+        const selesai = process.hrtime.bigint();
+
+        expect(hasil).toBe(plaintext);
+        durasiMs.push(Number(selesai - mulai) / 1e6);
+        contohCiphertext = ciphertext;
+      }
+
+      const rataRata = durasiMs.reduce((total, d) => total + d, 0) / durasiMs.length;
+      const maksimum = Math.max(...durasiMs);
+
+      // Ukuran data: plaintext dalam byte UTF-8 vs ciphertext sebagai string hex
+      // (1 karakter hex = 1 byte saat disimpan sebagai string di database).
+      const ukuranPlaintextByte = Buffer.byteLength(plaintext, 'utf8');
+      const ukuranCiphertextHexByte = contohCiphertext.length;
+      const rasioEkspansi = ukuranCiphertextHexByte / ukuranPlaintextByte;
+
+      // eslint-disable-next-line no-console
+      console.log(
+        `[PERF] ${nama}: rata-rata=${rataRata.toFixed(4)}ms, maks=${maksimum.toFixed(4)}ms ` +
+          `(${JUMLAH_ITERASI} iterasi) | plaintext=${ukuranPlaintextByte} byte, ` +
+          `ciphertext hex=${ukuranCiphertextHexByte} byte, rasio ekspansi=${rasioEkspansi.toFixed(2)}x`
+      );
+
+      // Setiap siklus tunggal (termasuk yang paling lambat) harus di bawah ambang batas
+      expect(maksimum).toBeLessThan(AMBANG_BATAS_MS);
+      expect(rataRata).toBeLessThan(AMBANG_BATAS_MS);
+    });
+  });
+});
+
 describe('encryption.util — encryptJson & decryptJson (Unit Test)', () => {
   it('harus berhasil enkripsi-dekripsi object JSON (media_sosial)', () => {
     const mediaSosial = { instagram: '@jemaat123', facebook: 'Jemaat Test' };

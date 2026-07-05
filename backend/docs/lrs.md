@@ -5,6 +5,12 @@ Setiap tabel ditampilkan hanya dengan PK dan FK-nya — atribut non-key
 tetap mengikuti definisi di ERD/BAGIAN 0 dokumen spesifikasi, namun
 tidak diulang di sini agar fokus pada struktur relasi.
 
+Catatan (migration 005): atribut non-key `jemaat.nama`, `jemaat.tgl_lahir`,
+dan `jemaat.jenis_kelamin` kini bertipe TEXT berisi ciphertext AES-256-CBC,
+masing-masing dengan kolom IV pendamping `nama_iv`, `tgl_lahir_iv`,
+`jenis_kelamin_iv` (VARCHAR(32) NULL) — pola sama dengan `no_hp_iv`.
+Lihat spesifikasi lengkap di `erd.md` dan `src/database/schema.sql`.
+
 Notasi kardinalitas: `1 : N` dibaca "1 baris di tabel referensi
 berelasi dengan N baris di tabel pemilik FK". `1 : 1` berarti relasi
 satu-ke-satu (FK bersifat unique).

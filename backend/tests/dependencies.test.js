@@ -31,11 +31,6 @@ describe('Dependency Installation Check', () => {
     expect(typeof cookieParser).toBe('function');
   });
 
-  it('bull harus terinstall dan berupa constructor function', () => {
-    const Queue = require('bull');
-    expect(typeof Queue).toBe('function');
-  });
-
   it('ioredis harus terinstall dan berupa constructor function', () => {
     const Redis = require('ioredis');
     expect(typeof Redis).toBe('function');

@@ -9,6 +9,7 @@ const {
   updateEventValidation,
   inputKehadiranValidation,
   assignVolunteerValidation,
+  replaceVolunteerValidation,
 } = require('./event.validation');
 
 router.post('/events', authenticate, requireRole('ADMIN', 'LEADER'), createEventValidation, handleValidationErrors, eventController.createEvent);
@@ -17,8 +18,11 @@ router.get('/events/:id', authenticate, eventController.getEvent);
 router.put('/events/:id', authenticate, requireRole('ADMIN', 'LEADER'), updateEventValidation, handleValidationErrors, eventController.updateEvent);
 router.patch('/events/:id/status', authenticate, requireRole('ADMIN', 'LEADER'), eventController.updateStatus);
 router.post('/events/:id/kehadiran', authenticate, inputKehadiranValidation, handleValidationErrors, eventController.inputKehadiran);
+router.get('/events/:id/kehadiran', authenticate, eventController.getKehadiran);
 router.get('/events/:id/volunteers', authenticate, eventController.listVolunteers);
 router.post('/events/:id/volunteers', authenticate, assignVolunteerValidation, handleValidationErrors, eventController.assignVolunteer);
+router.patch('/events/:id/volunteers/:volunteerId/replace', authenticate, replaceVolunteerValidation, handleValidationErrors, eventController.replaceVolunteer);
+router.delete('/events/:id/volunteers/:volunteerId', authenticate, eventController.cancelVolunteer);
 router.get('/events/:id/suggest-volunteers/:jenisId', authenticate, eventController.suggestVolunteers);
 
 // Deferred dari Step 12

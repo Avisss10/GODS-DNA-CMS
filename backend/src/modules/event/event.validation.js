@@ -27,9 +27,26 @@ const assignVolunteerValidation = [
   body('jenis_id').notEmpty().withMessage('jenis_id wajib diisi'),
 ];
 
+// durasi_menit hanya wajib untuk penggantian TENGAH_EVENT — untuk
+// SEBELUM_EVENT field ini diabaikan (baris lama langsung DIGANTIKAN).
+const replaceVolunteerValidation = [
+  body('replacement_timing')
+    .notEmpty().withMessage('replacement_timing wajib diisi')
+    .isIn(['SEBELUM_EVENT', 'TENGAH_EVENT']).withMessage('replacement_timing harus SEBELUM_EVENT atau TENGAH_EVENT'),
+  body('replaced_by')
+    .notEmpty().withMessage('replaced_by (jemaat pengganti) wajib diisi'),
+  body('alasan')
+    .notEmpty().withMessage('Alasan penggantian wajib diisi'),
+  body('durasi_menit')
+    .if(body('replacement_timing').equals('TENGAH_EVENT'))
+    .notEmpty().withMessage('durasi_menit wajib diisi jika penggantian TENGAH_EVENT')
+    .isInt({ min: 1 }).withMessage('durasi_menit harus angka positif'),
+];
+
 module.exports = {
   createEventValidation,
   updateEventValidation,
   inputKehadiranValidation,
   assignVolunteerValidation,
+  replaceVolunteerValidation,
 };

@@ -8,4 +8,5 @@ build/
 # Sertifikat TLS — environment-specific, jangan pernah commit
 *.pem
 *.crt
-*.key
+*.key# Arsip zip — bisa berisi .env; jangan pernah commit
+*.zip

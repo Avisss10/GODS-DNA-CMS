@@ -1,5 +1,45 @@
 const crypto = require('crypto');
 const auditlogRepository = require('./auditlog.repository');
+const { getRedisClient } = require('../../config/redis');
+const { notifyLeaders } = require('../notification/notification.stub');
+
+// Dedup notifikasi tamper per baris audit log: 1x per 24 jam,
+// supaya membuka halaman audit log berulang tidak membanjiri Leader.
+const TAMPER_NOTIFIED_TTL_SECONDS = 24 * 60 * 60;
+
+function tamperNotifiedKey(auditLogId) {
+  return `tamper_notified:${auditLogId}`;
+}
+
+/**
+ * Kirim notifikasi AUDIT_TAMPERED untuk satu baris yang HMAC-nya tidak
+ * cocok, dengan deduplikasi via Redis (SET NX EX — atomik).
+ *
+ * Hanya untuk status POTENTIALLY_TAMPERED; NO_SECRET (env belum diset)
+ * adalah masalah konfigurasi, bukan indikasi manipulasi data.
+ *
+ * Kegagalan apa pun di sini (Redis/notifikasi) ditelan dengan log —
+ * endpoint baca audit log TIDAK boleh ikut error.
+ *
+ * @param {number} auditLogId
+ */
+async function notifyTamperedRow(auditLogId) {
+  try {
+    const redis = getRedisClient();
+    const firstTime = await redis.set(
+      tamperNotifiedKey(auditLogId), '1', 'EX', TAMPER_NOTIFIED_TTL_SECONDS, 'NX'
+    );
+    if (firstTime !== 'OK') return; // sudah dinotifikasi dalam 24 jam terakhir
+
+    await notifyLeaders({
+      jenis: 'AUDIT_TAMPERED',
+      pesan: `Verifikasi HMAC gagal untuk audit log id=${auditLogId} — baris ini terindikasi dimanipulasi. Segera periksa integritas database.`,
+      meta: { auditLogId },
+    });
+  } catch (err) {
+    console.error(`notifyTamperedRow gagal untuk audit log ${auditLogId}:`, err.message);
+  }
+}
 
 /**
  * Verifikasi HMAC satu baris audit log.
@@ -56,7 +96,7 @@ function verifyHmac(row) {
 async function listAuditLogs(filters = {}) {
   const rows = await auditlogRepository.findAll(filters);
 
-  return rows.map((row) => {
+  const result = rows.map((row) => {
     const { valid, status } = verifyHmac(row);
     return {
       ...row,
@@ -74,6 +114,15 @@ async function listAuditLogs(filters = {}) {
       hmac_status: status,
     };
   });
+
+  // Notifikasi tamper untuk baris yang rusak (dedup 24 jam per baris)
+  for (const row of result) {
+    if (row.hmac_status === 'POTENTIALLY_TAMPERED') {
+      await notifyTamperedRow(row.id);
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -86,6 +135,11 @@ async function getAuditLogById(id) {
   if (!row) return null;
 
   const { valid, status } = verifyHmac(row);
+
+  if (status === 'POTENTIALLY_TAMPERED') {
+    await notifyTamperedRow(row.id);
+  }
+
   return {
     ...row,
     data_sebelum: row.data_sebelum
@@ -103,8 +157,11 @@ async function getAuditLogById(id) {
   };
 }
 
-module.exports = { 
-    verifyHmac, 
-    listAuditLogs, 
-    getAuditLogById
+module.exports = {
+    verifyHmac,
+    listAuditLogs,
+    getAuditLogById,
+    notifyTamperedRow,
+    tamperNotifiedKey,
+    TAMPER_NOTIFIED_TTL_SECONDS,
 };

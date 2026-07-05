@@ -1,9 +1,44 @@
 const { getPool } = require('../../config/database');
-const { encrypt, decrypt, encryptJson, decryptJson } = require('../../utils/encryption.util');
+const { encrypt, decrypt, decryptOptional, encryptJson, decryptJson } = require('../../utils/encryption.util');
 const { hashPhone } = require('../../utils/hash.util');
 
 const SENSITIVE_FIELDS = ['no_hp', 'alamat', 'media_sosial'];
 const DATE_ONLY_COLUMNS = ['tgl_lahir', 'tgl_bergabung', 'new_member_until'];
+
+/**
+ * Dua tingkat sensitivitas enkripsi pada tabel jemaat:
+ *
+ * 1. SENSITIVE_FIELDS (no_hp, alamat, media_sosial):
+ *    ciphertext-by-default — response GET biasa mengembalikan
+ *    ciphertext, plaintext hanya lewat GET /jemaat/:id/sensitive/:field
+ *    (dengan audit log VIEW_SENSITIVE).
+ *
+ * 2. IDENTITY_FIELDS (nama, tgl_lahir, jenis_kelamin):
+ *    terenkripsi at-rest di database (migration 005), tapi didekripsi
+ *    OTOMATIS di setiap response GET (list maupun detail), karena
+ *    dibutuhkan untuk tampilan dasar — daftar jemaat, dropdown pilih
+ *    jemaat, dsb. Tidak realistis memanggil endpoint /sensitive
+ *    terpisah hanya untuk menampilkan nama di setiap baris tabel.
+ */
+const IDENTITY_FIELDS = ['nama', 'tgl_lahir', 'jenis_kelamin'];
+
+/**
+ * Mengembalikan salinan row dengan nama/tgl_lahir/jenis_kelamin
+ * dalam bentuk plaintext (didekripsi memakai kolom _iv masing-masing).
+ * Baris lama yang belum di-backfill (_iv NULL) diteruskan apa adanya.
+ * Kolom _iv dibiarkan ada — pemanggil memutuskan mau menyaringnya
+ * atau tidak (konsisten dengan no_hp_iv yang juga ikut di SELECT *).
+ */
+function decryptIdentityFields(row) {
+  if (!row) return row;
+  const result = { ...row };
+  for (const field of IDENTITY_FIELDS) {
+    if (field in result) {
+      result[field] = decryptOptional(result[field], row[`${field}_iv`]);
+    }
+  }
+  return result;
+}
 
 /**
  * Mengonversi kolom bertipe DATE (yang dikembalikan mysql2 sebagai
@@ -59,6 +94,12 @@ function isSimilarName(nameA, nameB) {
 async function create(data) {
   const pool = getPool();
 
+  // Field identitas dienkripsi dengan IV baru per field (pola sama
+  // seperti no_hp/alamat/media_sosial) — lihat IDENTITY_FIELDS di atas.
+  const namaEnc = encrypt(String(data.nama));
+  const tglLahirEnc = encrypt(String(data.tgl_lahir));
+  const jenisKelaminEnc = encrypt(String(data.jenis_kelamin));
+
   const noHpEnc = data.no_hp ? encrypt(data.no_hp) : null;
   const alamatEnc = data.alamat ? encrypt(data.alamat) : null;
   const mediaSosialEnc = data.media_sosial ? encryptJson(data.media_sosial) : null;
@@ -69,20 +110,23 @@ async function create(data) {
 
   const [result] = await pool.query(
     `INSERT INTO jemaat (
-      nama, tgl_lahir, jenis_kelamin,
+      nama, nama_iv, tgl_lahir, tgl_lahir_iv, jenis_kelamin, jenis_kelamin_iv,
       no_hp, no_hp_iv, no_hp_hash, alamat, alamat_iv, media_sosial, media_sosial_iv,
       tgl_bergabung, is_active, is_new_member, new_member_until,
       is_non_cg, skor_keaktifan, status_keaktifan
     ) VALUES (
-      :nama, :tglLahir, :jenisKelamin,
+      :nama, :namaIv, :tglLahir, :tglLahirIv, :jenisKelamin, :jenisKelaminIv,
       :noHp, :noHpIv, :noHpHash, :alamat, :alamatIv, :mediaSosial, :mediaSosialIv,
       :tglBergabung, TRUE, TRUE, :newMemberUntil,
       TRUE, 0, 'BELUM_CUKUP_DATA'
     )`,
     {
-      nama: data.nama,
-      tglLahir: data.tgl_lahir,
-      jenisKelamin: data.jenis_kelamin,
+      nama: namaEnc.ciphertext,
+      namaIv: namaEnc.iv,
+      tglLahir: tglLahirEnc.ciphertext,
+      tglLahirIv: tglLahirEnc.iv,
+      jenisKelamin: jenisKelaminEnc.ciphertext,
+      jenisKelaminIv: jenisKelaminEnc.iv,
       noHp: noHpEnc ? noHpEnc.ciphertext : null,
       noHpIv: noHpEnc ? noHpEnc.iv : null,
       noHpHash: data.no_hp ? hashPhone(data.no_hp) : null,
@@ -104,7 +148,12 @@ async function findById(id) {
     'SELECT * FROM jemaat WHERE id = :id AND deleted_at IS NULL LIMIT 1',
     { id }
   );
-  return normalizeDateFields(rows[0]) || null;
+  if (!rows[0]) return null;
+
+  // Field identitas (nama, tgl_lahir, jenis_kelamin) didekripsi otomatis
+  // sebelum dikembalikan — transparan bagi konsumen API. no_hp/alamat/
+  // media_sosial TETAP ciphertext di sini (ciphertext-by-default).
+  return normalizeDateFields(decryptIdentityFields(rows[0]));
 }
 
 async function findByIdDecrypted(id) {
@@ -128,9 +177,6 @@ async function update(id, updates) {
   const params = { id };
 
   const fieldColumnMap = {
-    nama: 'nama',
-    tgl_lahir: 'tgl_lahir',
-    jenis_kelamin: 'jenis_kelamin',
     tgl_bergabung: 'tgl_bergabung',
     is_active: 'is_active',
   };
@@ -139,6 +185,23 @@ async function update(id, updates) {
     if (updates[field] !== undefined) {
       setClauses.push(`${column} = :${field}`);
       params[field] = updates[field];
+    }
+  }
+
+  // Field identitas: enkripsi dengan IV baru per operasi write,
+  // pola sama seperti no_hp/alamat/media_sosial di bawah.
+  const identityParamMap = {
+    nama: ['nama', 'namaIv'],
+    tgl_lahir: ['tglLahir', 'tglLahirIv'],
+    jenis_kelamin: ['jenisKelamin', 'jenisKelaminIv'],
+  };
+
+  for (const [field, [valueParam, ivParam]] of Object.entries(identityParamMap)) {
+    if (updates[field] !== undefined) {
+      const enc = encrypt(String(updates[field]));
+      setClauses.push(`${field} = :${valueParam}`, `${field}_iv = :${ivParam}`);
+      params[valueParam] = enc.ciphertext;
+      params[ivParam] = enc.iv;
     }
   }
 
@@ -184,12 +247,33 @@ async function softDelete(id) {
 
 async function findDuplicateCandidatesByNameAndBirthdate(nama, tglLahir) {
   const pool = getPool();
+
+  // Redesain pasca-enkripsi identitas (migration 005): nama dan
+  // tgl_lahir tersimpan sebagai ciphertext dengan IV acak per baris,
+  // sehingga WHERE tgl_lahir = ... dan perbandingan nama via SQL tidak
+  // mungkin lagi. Sebagai gantinya: ambil seluruh jemaat yang belum
+  // soft-delete, dekripsi nama+tgl_lahir per baris di memori, lalu
+  // jalankan levenshteinDistance/isSimilarName pada hasil dekripsi —
+  // logika kemiripan nama itu sendiri tidak berubah, hanya sumber
+  // datanya. Trade-off: full-scan + dekripsi per baris lebih lambat
+  // untuk jumlah jemaat sangat besar (ribuan+) dibanding query
+  // ber-index, tapi diperlukan demi enkripsi at-rest.
+  // (findDuplicateCandidatesByPhone tidak terpengaruh — tetap memakai
+  // no_hp_hash ber-index.)
   const [rows] = await pool.query(
-    `SELECT id, nama FROM jemaat WHERE tgl_lahir = :tglLahir AND deleted_at IS NULL`,
-    { tglLahir }
+    `SELECT id, nama, nama_iv, tgl_lahir, tgl_lahir_iv
+     FROM jemaat WHERE deleted_at IS NULL`
   );
 
-  return rows.filter((row) => isSimilarName(row.nama, nama));
+  const targetTglLahir = String(tglLahir);
+
+  return rows
+    .map((row) => normalizeDateFields(decryptIdentityFields(row)))
+    .filter(
+      (row) =>
+        String(row.tgl_lahir) === targetTglLahir && isSimilarName(row.nama, nama)
+    )
+    .map((row) => ({ id: row.id, nama: row.nama }));
 }
 
 async function findDuplicateCandidatesByPhone(noHpPlaintext) {
@@ -242,34 +326,51 @@ async function checkDependencies(jemaatId) {
 
 async function findAll({ search, limit = 50, offset = 0 } = {}) {
   const pool = getPool();
-  const params = { limit: Number(limit), offset: Number(offset) };
 
-  if (search) {
-    const [rows] = await pool.query(
-      `SELECT id, nama, tgl_lahir, jenis_kelamin, tgl_bergabung,
-              is_active, is_new_member, skor_keaktifan, status_keaktifan,
-              created_at
-       FROM jemaat
-       WHERE is_active = TRUE AND deleted_at IS NULL
-         AND nama LIKE :search
-       ORDER BY nama ASC
-       LIMIT :limit OFFSET :offset`,
-      { ...params, search: `%${search}%` }
-    );
-    return rows;
-  }
-
+  // Redesain pasca-enkripsi identitas (migration 005): kolom nama
+  // berisi ciphertext dengan IV acak per baris, jadi `nama LIKE ...`,
+  // `ORDER BY nama`, dan LIMIT/OFFSET di level SQL tidak valid lagi.
+  // Alurnya sekarang:
+  //   1. Ambil seluruh jemaat aktif dari DB (tanpa LIMIT SQL).
+  //   2. Dekripsi nama/tgl_lahir/jenis_kelamin tiap baris.
+  //   3. Filter search (substring case-insensitive) SETELAH dekripsi.
+  //   4. Sort nama di level aplikasi.
+  //   5. Pagination SETELAH filtering (slice di aplikasi).
+  // Trade-off: pendekatan ini bisa lebih lambat untuk jumlah jemaat
+  // yang sangat besar (ribuan+) dibanding LIKE + LIMIT native SQL,
+  // tapi diperlukan karena nama tidak lagi tersimpan sebagai plaintext
+  // yang bisa di-query langsung.
+  // TODO: jika volume jemaat tumbuh besar, pertimbangkan kolom hash
+  // pencarian (mis. nama_search_hash berisi HMAC dari nama lowercase,
+  // atau n-gram/token hash untuk substring match) yang di-index —
+  // sehingga filter bisa kembali dilakukan di SQL tanpa membuka
+  // plaintext, dan dekripsi cukup untuk halaman yang diminta saja.
   const [rows] = await pool.query(
-    `SELECT id, nama, tgl_lahir, jenis_kelamin, tgl_bergabung,
+    `SELECT id, nama, nama_iv, tgl_lahir, tgl_lahir_iv,
+            jenis_kelamin, jenis_kelamin_iv, tgl_bergabung,
             is_active, is_new_member, skor_keaktifan, status_keaktifan,
             created_at
      FROM jemaat
-     WHERE is_active = TRUE AND deleted_at IS NULL
-     ORDER BY nama ASC
-     LIMIT :limit OFFSET :offset`,
-    params
+     WHERE is_active = TRUE AND deleted_at IS NULL`
   );
-  return rows;
+
+  let decrypted = rows.map((row) => {
+    const { nama_iv, tgl_lahir_iv, jenis_kelamin_iv, ...rest } = decryptIdentityFields(row);
+    return normalizeDateFields(rest);
+  });
+
+  if (search) {
+    const needle = String(search).toLowerCase();
+    decrypted = decrypted.filter(
+      (row) => typeof row.nama === 'string' && row.nama.toLowerCase().includes(needle)
+    );
+  }
+
+  decrypted.sort((a, b) => String(a.nama).localeCompare(String(b.nama)));
+
+  const start = Number(offset) || 0;
+  const size = Number(limit) || 50;
+  return decrypted.slice(start, start + size);
 }
 
 /**

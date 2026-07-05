@@ -48,8 +48,23 @@ describe('Database Schema (schema.sql)', () => {
   });
 
   describe('jemaat', () => {
-    it('jenis_kelamin harus ENUM(L, P)', () => {
-      expect(sql).toMatch(/jenis_kelamin\s+ENUM\('L','P'\) NOT NULL/i);
+    // Migration 005: nama, tgl_lahir, jenis_kelamin dienkripsi
+    // AES-256-CBC — tipe kolom TEXT (ciphertext hex) + kolom IV
+    // pendamping VARCHAR(32), pola sama dengan no_hp_iv.
+    it('nama harus TEXT (ciphertext) dengan nama_iv VARCHAR(32)', () => {
+      expect(sql).toMatch(/nama\s+TEXT NOT NULL/i);
+      expect(sql).toMatch(/nama_iv\s+VARCHAR\(32\) NULL/i);
+    });
+    it('tgl_lahir harus TEXT (ciphertext) dengan tgl_lahir_iv VARCHAR(32)', () => {
+      expect(sql).toMatch(/tgl_lahir\s+TEXT NOT NULL/i);
+      expect(sql).toMatch(/tgl_lahir_iv\s+VARCHAR\(32\) NULL/i);
+    });
+    it('jenis_kelamin harus TEXT (ciphertext) dengan jenis_kelamin_iv VARCHAR(32)', () => {
+      expect(sql).toMatch(/jenis_kelamin\s+TEXT NOT NULL/i);
+      expect(sql).toMatch(/jenis_kelamin_iv\s+VARCHAR\(32\) NULL/i);
+    });
+    it('tidak boleh lagi ada index komposit nama+tgl_lahir (kolom TEXT ciphertext)', () => {
+      expect(sql).not.toMatch(/idx_jemaat_nama_tgl_lahir/i);
     });
     it('status_keaktifan harus ENUM 4 nilai sesuai BAGIAN 6.2', () => {
       expect(sql).toMatch(
@@ -110,9 +125,9 @@ describe('Database Schema (schema.sql)', () => {
   });
 
   describe('event_volunteer', () => {
-    it('status harus ENUM(AKTIF, DIGANTIKAN, BERTUGAS_PARSIAL)', () => {
+    it('status harus ENUM(AKTIF, DIGANTIKAN, BERTUGAS_PARSIAL, DIBATALKAN)', () => {
       expect(sql).toMatch(
-        /status\s+ENUM\('AKTIF','DIGANTIKAN','BERTUGAS_PARSIAL'\) NOT NULL DEFAULT 'AKTIF'/i
+        /status\s+ENUM\('AKTIF','DIGANTIKAN','BERTUGAS_PARSIAL','DIBATALKAN'\) NOT NULL DEFAULT 'AKTIF'/i
       );
     });
     it('replacement_timing harus ENUM nullable (BAGIAN 5.6)', () => {

@@ -1,26 +1,39 @@
 const { getPool } = require('../../config/database');
+const { decryptOptional } = require('../../utils/encryption.util');
 
 /**
  * Ambil semua jemaat aktif beserta skor untuk laporan.
- * Data sensitif (no_hp, alamat) dikembalikan dalam bentuk
- * ciphertext — dekripsi dilakukan di service (streaming).
+ * Field identitas (nama, tgl_lahir, jenis_kelamin) tersimpan sebagai
+ * ciphertext (migration 005) dan didekripsi otomatis di sini.
+ * Data sensitif on-demand (no_hp, alamat) tetap dikembalikan dalam
+ * bentuk ciphertext — dekripsi dilakukan di service (streaming).
+ *
+ * Catatan: ORDER BY id (bukan nama) karena kolom nama kini ciphertext
+ * — urutan alfabetis SQL tidak bermakna lagi, sementara sorting di
+ * aplikasi tidak konsisten dengan pagination per-batch (streaming).
  * @param {{ limit?, offset? }} options
  * @returns {Promise<Array<object>>}
  */
 async function getJemaatReport({ limit = 500, offset = 0 } = {}) {
   const pool = getPool();
   const [rows] = await pool.query(
-    `SELECT id, nama, tgl_lahir, jenis_kelamin,
+    `SELECT id, nama, nama_iv, tgl_lahir, tgl_lahir_iv,
+            jenis_kelamin, jenis_kelamin_iv,
             no_hp, no_hp_iv, alamat, alamat_iv,
             tgl_bergabung, is_active, is_new_member,
             skor_keaktifan, status_keaktifan, created_at
      FROM jemaat
      WHERE is_active = TRUE AND deleted_at IS NULL
-     ORDER BY nama ASC
+     ORDER BY id ASC
      LIMIT :limit OFFSET :offset`,
     { limit, offset }
   );
-  return rows;
+  return rows.map(({ nama_iv, tgl_lahir_iv, jenis_kelamin_iv, ...row }) => ({
+    ...row,
+    nama: decryptOptional(row.nama, nama_iv),
+    tgl_lahir: decryptOptional(row.tgl_lahir, tgl_lahir_iv),
+    jenis_kelamin: decryptOptional(row.jenis_kelamin, jenis_kelamin_iv),
+  }));
 }
 
 /**
@@ -83,10 +96,12 @@ async function getCGKehadiranReport({ cgId, jemaatId, startDate, endDate, limit 
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
+  // Nama jemaat tersimpan sebagai ciphertext (migration 005) —
+  // dekripsi di level aplikasi memakai IV-nya.
   const [rows] = await pool.query(
     `SELECT cg.nama AS nama_cg, cm.id AS meeting_id, cm.judul,
             cm.jenis, cm.waktu_mulai,
-            j.nama AS nama_jemaat, ca.hadir
+            j.nama AS nama_jemaat, j.nama_iv AS nama_jemaat_iv, ca.hadir
      FROM cg_absensi ca
      JOIN cg_meeting cm ON ca.meeting_id = cm.id
      JOIN cell_group cg ON cm.cg_id = cg.id
@@ -96,7 +111,10 @@ async function getCGKehadiranReport({ cgId, jemaatId, startDate, endDate, limit 
      LIMIT :limit OFFSET :offset`,
     params
   );
-  return rows;
+  return rows.map(({ nama_jemaat_iv, ...row }) => ({
+    ...row,
+    nama_jemaat: decryptOptional(row.nama_jemaat, nama_jemaat_iv),
+  }));
 }
 
 /**
@@ -116,8 +134,11 @@ async function getVolunteerReport({ jemaatId, eventId, startDate, endDate, limit
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
+  // Nama jemaat tersimpan sebagai ciphertext (migration 005) —
+  // dekripsi di level aplikasi memakai IV-nya.
   const [rows] = await pool.query(
-    `SELECT j.nama AS nama_jemaat, e.judul AS nama_event,
+    `SELECT j.nama AS nama_jemaat, j.nama_iv AS nama_jemaat_iv,
+            e.judul AS nama_event,
             e.waktu_mulai, vj.nama AS jenis_volunteer,
             ev.status, ev.durasi_menit, ev.created_at
      FROM event_volunteer ev
@@ -129,7 +150,10 @@ async function getVolunteerReport({ jemaatId, eventId, startDate, endDate, limit
      LIMIT :limit OFFSET :offset`,
     params
   );
-  return rows;
+  return rows.map(({ nama_jemaat_iv, ...row }) => ({
+    ...row,
+    nama_jemaat: decryptOptional(row.nama_jemaat, nama_jemaat_iv),
+  }));
 }
 
 /**

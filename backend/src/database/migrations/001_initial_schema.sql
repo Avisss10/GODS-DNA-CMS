@@ -21,9 +21,14 @@ CREATE TABLE IF NOT EXISTS users (
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS jemaat (
     id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    nama                VARCHAR(100) NOT NULL,
-    tgl_lahir           DATE NOT NULL,
-    jenis_kelamin       ENUM('L','P') NOT NULL,
+    -- nama, tgl_lahir, jenis_kelamin: ciphertext AES-256-CBC (hex) +
+    -- IV per field (migration 005) — didekripsi otomatis di aplikasi.
+    nama                TEXT NOT NULL,
+    nama_iv             VARCHAR(32) NULL,
+    tgl_lahir           TEXT NOT NULL,
+    tgl_lahir_iv        VARCHAR(32) NULL,
+    jenis_kelamin       TEXT NOT NULL,
+    jenis_kelamin_iv    VARCHAR(32) NULL,
     no_hp               TEXT NULL,
     no_hp_iv            VARCHAR(32) NULL,
     no_hp_hash          CHAR(64) NULL,
@@ -43,7 +48,6 @@ CREATE TABLE IF NOT EXISTS jemaat (
     updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at          TIMESTAMP NULL,
 
-    INDEX idx_jemaat_nama_tgl_lahir (nama, tgl_lahir),
     INDEX idx_jemaat_is_active (is_active),
     INDEX idx_jemaat_status_keaktifan (status_keaktifan),
     INDEX idx_jemaat_no_hp_hash (no_hp_hash),

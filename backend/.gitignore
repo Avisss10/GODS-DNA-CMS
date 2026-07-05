@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Environment — jangan pernah commit secret (.env.example tetap di-commit)
+.env
+
+# File upload runtime (foto meeting, hasil export laporan)
+uploads/
+
+# Coverage & log
+coverage/
+*.log
+logs/

@@ -1,5 +1,5 @@
 const { getRedisClient } = require('../../config/redis');
-const { comparePassword } = require('../../utils/password.util');
+const { comparePassword, hashPassword } = require('../../utils/password.util');
 const { signAccessToken, signRefreshToken, verifyAccessToken, verifyRefreshToken } = require('../../utils/jwt.util');
 const authRepository = require('./auth.repository');
 const { recordAuditLog } = require('../auditlog/auditlog.repository');
@@ -31,14 +31,53 @@ function tokenBlacklistKey(token) {
   return `blacklist_token:${token}`;
 }
 
+function knownIpsKey(userId) {
+  return `known_ips:${userId}`;
+}
+
+const KNOWN_IPS_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 hari
+
+/**
+ * Cek apakah login datang dari IP yang belum dikenal untuk user ini
+ * (set Redis known_ips:{userId}, TTL 30 hari). IP baru → kirim
+ * notifikasi LOGIN_IP_BARU ke Leader, lalu daftarkan IP-nya.
+ * Kegagalan di sini tidak boleh menggagalkan login.
+ *
+ * @param {object} redis
+ * @param {{ id: number, username: string }} user
+ * @param {string} ipAddress
+ */
+async function checkNewIpLogin(redis, user, ipAddress) {
+  try {
+    const key = knownIpsKey(user.id);
+    const isKnown = await redis.sismember(key, ipAddress);
+
+    if (!isKnown) {
+      await notifyLeaders({
+        jenis: 'LOGIN_IP_BARU',
+        pesan: `Akun "${user.username}" login dari IP baru: ${ipAddress}.`,
+        meta: { userId: user.id, ipAddress },
+      });
+      await redis.sadd(key, ipAddress);
+    }
+    // Refresh TTL setiap login agar daftar IP dikenal bertahan 30 hari
+    // sejak aktivitas terakhir.
+    await redis.expire(key, KNOWN_IPS_TTL_SECONDS);
+  } catch (err) {
+    console.error('checkNewIpLogin error (login tetap lanjut):', err.message);
+  }
+}
+
 /**
  * Proses login lengkap sesuai 14 langkah BAGIAN 1.1.
  *
- * @param {{ username: string, password: string }} credentials
+ * @param {{ username: string, password: string, ipAddress?: string }} credentials
+ *   ipAddress (dari req.ip, butuh trust proxy) dipakai untuk deteksi
+ *   login dari IP baru — opsional agar pemanggil lama tetap kompatibel.
  * @returns {Promise<{ peran: string, nama: string, accessToken: string, refreshToken: string }>}
  * @throws {AuthError} dengan statusCode 401/403/429 sesuai langkah dokumen
  */
-async function login({ username, password }) {
+async function login({ username, password, ipAddress }) {
   const redis = getRedisClient();
 
   // Langkah 1-2: cari user, 401 generik jika tidak ada
@@ -98,6 +137,11 @@ async function login({ username, password }) {
 
   // Langkah 10: simpan refresh token hash di Redis (untuk revoke)
   await redis.set(refreshTokenKey(user.id), refreshToken, 'EX', 7 * 24 * 60 * 60);
+
+  // Deteksi login dari IP yang belum dikenal (notifikasi LOGIN_IP_BARU)
+  if (ipAddress) {
+    await checkNewIpLogin(redis, user, ipAddress);
+  }
 
   // Langkah 12: update last_login_at
   await authRepository.updateLastLogin(user.id);
@@ -263,16 +307,90 @@ async function resetAdminPassword(leaderId, targetUserId, newPassword) {
   return { username: target.username };
 }
 
+/**
+ * Membuat akun ADMIN/LEADER baru (hanya bisa dipanggil oleh LEADER —
+ * ditegakkan di layer route via requireRole).
+ *
+ * @param {{ username: string, password: string, peran: 'LEADER'|'ADMIN' }} data
+ * @param {object} options
+ * @param {number} options.actorUserId - LEADER yang membuat akun (untuk audit log)
+ * @returns {Promise<{ id: number, username: string, peran: string }>}
+ * @throws {AuthError} 409 jika username sudah terdaftar
+ */
+async function createUser({ username, password, peran }, { actorUserId = null } = {}) {
+  const existing = await authRepository.findByUsername(username);
+  if (existing) {
+    throw new AuthError('Username sudah terdaftar', 409);
+  }
+
+  const passwordHash = await hashPassword(password);
+  const id = await authRepository.createUser({ username, passwordHash, peran });
+
+  await recordAuditLog({
+    userId: actorUserId,
+    aksi: 'CREATE_USER',
+    modul: 'USER',
+    objectId: id,
+    dataSebelum: null,
+    dataSesudah: { username, peran },
+  });
+
+  return { id, username, peran };
+}
+
+/**
+ * Mengaktifkan/menonaktifkan akun user (hanya bisa dipanggil oleh
+ * LEADER). Menolak menonaktifkan LEADER jika itu satu-satunya LEADER
+ * aktif yang tersisa (BAGIAN 12 #2).
+ *
+ * @param {number} targetUserId
+ * @param {boolean} aktif
+ * @param {object} options
+ * @param {number} options.actorUserId
+ * @returns {Promise<{ username: string }>}
+ * @throws {AuthError} 404 jika user tidak ditemukan, 400 jika menonaktifkan satu-satunya LEADER aktif
+ */
+async function updateUserStatus(targetUserId, aktif, { actorUserId = null } = {}) {
+  const target = await authRepository.findById(targetUserId);
+  if (!target) {
+    throw new AuthError('User tidak ditemukan', 404);
+  }
+
+  if (target.peran === 'LEADER' && aktif === false) {
+    const activeLeaders = await authRepository.countActiveLeaders();
+    if (activeLeaders <= 1) {
+      throw new AuthError('Tidak dapat menonaktifkan satu-satunya LEADER aktif', 400);
+    }
+  }
+
+  await authRepository.updateAktif(targetUserId, aktif);
+
+  await recordAuditLog({
+    userId: actorUserId,
+    aksi: aktif ? 'ACTIVATE_USER' : 'DEACTIVATE_USER',
+    modul: 'USER',
+    objectId: targetUserId,
+    dataSebelum: { aktif: target.aktif },
+    dataSesudah: { aktif },
+  });
+
+  return { username: target.username };
+}
+
 module.exports = {
   AuthError,
   login,
   logout,
   refreshAccessToken,
   resetAdminPassword,
+  createUser,
+  updateUserStatus,
   failedLoginKey,
   activeSessionKey,
   refreshTokenKey,
   tokenBlacklistKey,
+  knownIpsKey,
+  KNOWN_IPS_TTL_SECONDS,
   MAX_FAILED_ATTEMPTS,
   FAILED_ATTEMPTS_WINDOW_SECONDS,
 };

@@ -1,4 +1,5 @@
 const { getPool } = require('../../config/database');
+const { decryptOptional } = require('../../utils/encryption.util');
 
 /**
  * Membuat CG baru sekaligus mendaftarkan leader sebagai anggota
@@ -124,14 +125,19 @@ async function removeMember(cgId, jemaatId) {
  */
 async function findActiveMembers(cgId) {
   const pool = getPool();
+  // j.nama tersimpan sebagai ciphertext (migration 005) — dekripsi
+  // di level aplikasi memakai j.nama_iv sebelum dikembalikan.
   const [rows] = await pool.query(
-    `SELECT j.id, j.nama, cgm.joined_at
+    `SELECT j.id, j.nama, j.nama_iv, cgm.joined_at
      FROM cell_group_members cgm
      JOIN jemaat j ON cgm.jemaat_id = j.id
      WHERE cgm.cg_id = :cgId AND cgm.left_at IS NULL AND j.deleted_at IS NULL`,
     { cgId }
   );
-  return rows;
+  return rows.map(({ nama_iv, ...row }) => ({
+    ...row,
+    nama: decryptOptional(row.nama, nama_iv),
+  }));
 }
 
 /**
@@ -141,20 +147,25 @@ async function findActiveMembers(cgId) {
  */
 async function findAll({ limit = 50, offset = 0 } = {}) {
   const pool = getPool();
+  // Nama leader (j.nama) tersimpan sebagai ciphertext (migration 005)
+  // — dekripsi di level aplikasi memakai IV-nya.
   const [rows] = await pool.query(
     `SELECT cg.id, cg.nama, cg.deskripsi, cg.is_active,
-            cg.created_at, j.nama AS nama_leader,
+            cg.created_at, j.nama AS nama_leader, j.nama_iv AS nama_leader_iv,
             COUNT(cgm.id) AS jumlah_anggota
      FROM cell_group cg
      LEFT JOIN jemaat j ON cg.leader_id = j.id
      LEFT JOIN cell_group_members cgm ON cgm.cg_id = cg.id AND cgm.left_at IS NULL
      WHERE cg.is_active = TRUE AND cg.deleted_at IS NULL
-     GROUP BY cg.id, cg.nama, cg.deskripsi, cg.is_active, cg.created_at, j.nama
+     GROUP BY cg.id, cg.nama, cg.deskripsi, cg.is_active, cg.created_at, j.nama, j.nama_iv
      ORDER BY cg.nama ASC
      LIMIT :limit OFFSET :offset`,
     { limit: Number(limit), offset: Number(offset) }
   );
-  return rows;
+  return rows.map(({ nama_leader_iv, ...row }) => ({
+    ...row,
+    nama_leader: decryptOptional(row.nama_leader, nama_leader_iv),
+  }));
 }
 
 /**
@@ -217,6 +228,33 @@ async function deactivate(id) {
   );
 }
 
+/**
+ * Mencari CG by id TERMASUK yang sudah soft-deleted — dipakai alur
+ * reaktivasi, karena findById() sengaja menyaring deleted_at IS NULL.
+ * @param {number} id
+ * @returns {Promise<object|null>}
+ */
+async function findByIdIncludingDeleted(id) {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    'SELECT * FROM cell_group WHERE id = :id LIMIT 1',
+    { id }
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Reaktivasi CG yang sudah dinonaktifkan: is_active=TRUE, deleted_at=NULL.
+ * @param {number} id
+ */
+async function activate(id) {
+  const pool = getPool();
+  await pool.query(
+    'UPDATE cell_group SET is_active = TRUE, deleted_at = NULL WHERE id = :id',
+    { id }
+  );
+}
+
 module.exports = {
   create,
   findById,
@@ -229,4 +267,6 @@ module.exports = {
   update,
   countActiveMembers,
   deactivate,
+  findByIdIncludingDeleted,
+  activate,
 };

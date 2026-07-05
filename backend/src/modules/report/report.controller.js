@@ -1,9 +1,33 @@
 const reportService = require('./report.service');
+const { ReportError } = reportService;
 const fs = require('fs');
 
 function handleError(err, res) {
+  if (err instanceof ReportError) {
+    return res.status(err.statusCode).json({ message: err.message });
+  }
   console.error('Report controller error:', err);
   return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+}
+
+/**
+ * Mengirim hasil generate*Report ke client: jika async, kembalikan
+ * token JSON (tidak berubah); jika sinkron, file yang sudah ditulis
+ * ke disk (streaming, BAGIAN 7) langsung dikirim sebagai attachment
+ * lalu dihapus setelah selesai dikirim.
+ */
+function sendReportResult(res, result) {
+  if (result.async) {
+    return res.status(200).json({ async: true, token: result.token, message: result.message });
+  }
+
+  res.setHeader('Content-Disposition', `attachment; filename="${result.fileName}"`);
+  res.setHeader('Content-Type', result.contentType);
+  const fileStream = fs.createReadStream(result.filePath);
+  fileStream.pipe(res);
+  fileStream.on('end', () => {
+    fs.unlink(result.filePath, () => {});
+  });
 }
 
 // GET /api/reports/jemaat
@@ -11,11 +35,12 @@ async function jemaatReport(req, res) {
   try {
     const actorUserId = req.user?.userId ?? null;
     const includeSensitive = req.query.sensitive === 'true';
+    const format = req.query.format;
     const result = await reportService.generateJemaatReport(
-      { includeSensitive },
+      { includeSensitive, format },
       { actorUserId }
     );
-    return res.status(200).json(result);
+    return sendReportResult(res, result);
   } catch (err) {
     return handleError(err, res);
   }
@@ -25,12 +50,12 @@ async function jemaatReport(req, res) {
 async function eventReport(req, res) {
   try {
     const actorUserId = req.user?.userId ?? null;
-    const { eventId, startDate, endDate } = req.query;
+    const { eventId, startDate, endDate, format } = req.query;
     const result = await reportService.generateEventReport(
-      { eventId, startDate, endDate },
+      { eventId, startDate, endDate, format },
       { actorUserId }
     );
-    return res.status(200).json(result);
+    return sendReportResult(res, result);
   } catch (err) {
     return handleError(err, res);
   }
@@ -40,12 +65,12 @@ async function eventReport(req, res) {
 async function cgReport(req, res) {
   try {
     const actorUserId = req.user?.userId ?? null;
-    const { cgId, jemaatId, startDate, endDate } = req.query;
+    const { cgId, jemaatId, startDate, endDate, format } = req.query;
     const result = await reportService.generateCGReport(
-      { cgId, jemaatId, startDate, endDate },
+      { cgId, jemaatId, startDate, endDate, format },
       { actorUserId }
     );
-    return res.status(200).json(result);
+    return sendReportResult(res, result);
   } catch (err) {
     return handleError(err, res);
   }
@@ -55,12 +80,12 @@ async function cgReport(req, res) {
 async function volunteerReport(req, res) {
   try {
     const actorUserId = req.user?.userId ?? null;
-    const { jemaatId, eventId, startDate, endDate } = req.query;
+    const { jemaatId, eventId, startDate, endDate, format } = req.query;
     const result = await reportService.generateVolunteerReport(
-      { jemaatId, eventId, startDate, endDate },
+      { jemaatId, eventId, startDate, endDate, format },
       { actorUserId }
     );
-    return res.status(200).json(result);
+    return sendReportResult(res, result);
   } catch (err) {
     return handleError(err, res);
   }
@@ -71,11 +96,12 @@ async function analyticsReport(req, res) {
   try {
     const actorUserId = req.user?.userId ?? null;
     const bulan = req.query.bulan ? Number(req.query.bulan) : 12;
+    const format = req.query.format;
     const result = await reportService.generateAnalyticsReport(
-      { bulan },
+      { bulan, format },
       { actorUserId }
     );
-    return res.status(200).json(result);
+    return sendReportResult(res, result);
   } catch (err) {
     return handleError(err, res);
   }
@@ -92,7 +118,7 @@ async function downloadReport(req, res) {
     }
 
     res.setHeader('Content-Disposition', `attachment; filename="${entry.fileName}"`);
-    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Type', entry.contentType);
 
     const fileStream = fs.createReadStream(entry.filePath);
     fileStream.pipe(res);

@@ -16,6 +16,9 @@ const {
   removeMemberFromCg,
   createMeeting,
   addPhotoToMeeting,
+  listMeetingPhotos,
+  getPhotoFile,
+  deletePhoto,
   submitAbsensi,
 } = require('../../../../src/modules/cellgroup/cellgroup.service');
 
@@ -120,15 +123,15 @@ describe('cellgroup.service — addPhotoToMeeting (Unit Test)', () => {
     await expect(addPhotoToMeeting(1, Buffer.from('fake'))).rejects.toMatchObject({ statusCode: 404 });
   });
 
-  it('harus 400 jika sudah ada 10 foto', async () => {
+  it('harus 400 jika sudah ada 5 foto', async () => {
     meetingRepository.findMeetingById.mockResolvedValue({ id: 1 });
-    meetingRepository.countMeetingPhotos.mockResolvedValue(10);
+    meetingRepository.countMeetingPhotos.mockResolvedValue(5);
 
     await expect(addPhotoToMeeting(1, Buffer.from('fake'))).rejects.toMatchObject({ statusCode: 400 });
     expect(compressToTargetSize).not.toHaveBeenCalled();
   });
 
-  it('harus mengompres foto dan menyimpannya jika belum 10 foto', async () => {
+  it('harus mengompres foto dan menyimpannya jika belum 5 foto', async () => {
     meetingRepository.findMeetingById.mockResolvedValue({ id: 1 });
     meetingRepository.countMeetingPhotos.mockResolvedValue(3);
     compressToTargetSize.mockResolvedValue({ buffer: Buffer.from('compressed'), sizeKb: 480, quality: 60 });
@@ -163,5 +166,130 @@ describe('cellgroup.service — submitAbsensi (Unit Test)', () => {
     expect(meetingRepository.upsertAbsensi).toHaveBeenCalledWith(1, 10, true);
     expect(meetingRepository.upsertAbsensi).toHaveBeenCalledWith(1, 11, false);
     expect(recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({ aksi: 'INPUT_ABSENSI_CG' }));
+  });
+});
+describe('cellgroup.service — listMeetingPhotos (Unit Test)', () => {
+  it('harus 404 jika meeting tidak ditemukan', async () => {
+    meetingRepository.findMeetingById.mockResolvedValue(null);
+
+    await expect(listMeetingPhotos(1)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('harus mengembalikan daftar foto dari repository', async () => {
+    meetingRepository.findMeetingById.mockResolvedValue({ id: 1 });
+    const photos = [{ id: 3, file_size_kb: 480, uploaded_by: 9, created_at: '2026-07-01' }];
+    meetingRepository.findPhotosByMeetingId.mockResolvedValue(photos);
+
+    await expect(listMeetingPhotos(1)).resolves.toEqual(photos);
+    expect(meetingRepository.findPhotosByMeetingId).toHaveBeenCalledWith(1);
+  });
+});
+
+describe('cellgroup.service — getPhotoFile (Unit Test)', () => {
+  it('harus 404 jika record foto tidak ditemukan', async () => {
+    meetingRepository.findPhotoById.mockResolvedValue(null);
+
+    await expect(getPhotoFile(99)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('harus 400 jika file_path keluar dari folder uploads (path traversal)', async () => {
+    meetingRepository.findPhotoById.mockResolvedValue({
+      id: 3, file_path: '/uploads/../.env',
+    });
+
+    await expect(getPhotoFile(3)).rejects.toMatchObject({
+      statusCode: 400, message: 'Path file foto tidak valid',
+    });
+    expect(fs.existsSync).not.toHaveBeenCalled();
+  });
+
+  it('harus 404 jika file sudah tidak ada di disk', async () => {
+    meetingRepository.findPhotoById.mockResolvedValue({
+      id: 3, file_path: '/uploads/cg-meeting-photos/meeting-1-123.jpg',
+    });
+    fs.existsSync.mockReturnValue(false);
+
+    await expect(getPhotoFile(3)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('harus mengembalikan path absolut di dalam uploads + content type yang benar', async () => {
+    meetingRepository.findPhotoById.mockResolvedValue({
+      id: 3, file_path: '/uploads/cg-meeting-photos/meeting-1-123.jpg',
+    });
+    fs.existsSync.mockReturnValue(true);
+
+    const result = await getPhotoFile(3);
+
+    expect(result.contentType).toBe('image/jpeg');
+    expect(result.absolutePath).toContain('cg-meeting-photos');
+    expect(result.absolutePath).toContain('meeting-1-123.jpg');
+  });
+});
+
+describe('cellgroup.service — deletePhoto (Unit Test)', () => {
+  it('harus 404 jika record foto tidak ditemukan', async () => {
+    meetingRepository.findPhotoById.mockResolvedValue(null);
+
+    await expect(deletePhoto(99)).rejects.toMatchObject({ statusCode: 404 });
+    expect(meetingRepository.deleteMeetingPhoto).not.toHaveBeenCalled();
+  });
+
+  it('harus menghapus file di disk, record DB, dan mencatat audit log', async () => {
+    meetingRepository.findPhotoById.mockResolvedValue({
+      id: 3, meeting_id: 1, file_path: '/uploads/cg-meeting-photos/meeting-1-123.jpg', file_size_kb: 480,
+    });
+    fs.existsSync.mockReturnValue(true);
+
+    await deletePhoto(3, { actorUserId: 9 });
+
+    expect(fs.unlinkSync).toHaveBeenCalled();
+    expect(meetingRepository.deleteMeetingPhoto).toHaveBeenCalledWith(3);
+    expect(recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ aksi: 'DELETE_MEETING_PHOTO', modul: 'CELL_GROUP', objectId: 1 })
+    );
+  });
+
+  it('file yang sudah hilang dari disk tidak menggagalkan penghapusan record', async () => {
+    meetingRepository.findPhotoById.mockResolvedValue({
+      id: 3, meeting_id: 1, file_path: '/uploads/cg-meeting-photos/meeting-1-123.jpg', file_size_kb: 480,
+    });
+    fs.existsSync.mockReturnValue(false);
+
+    await deletePhoto(3, { actorUserId: 9 });
+
+    expect(fs.unlinkSync).not.toHaveBeenCalled();
+    expect(meetingRepository.deleteMeetingPhoto).toHaveBeenCalledWith(3);
+  });
+});
+
+describe('cellgroup.service — activateCellGroup (Unit Test)', () => {
+  it('harus 404 jika CG tidak pernah ada', async () => {
+    cgRepository.findByIdIncludingDeleted.mockResolvedValue(null);
+
+    await expect(
+      require('../../../../src/modules/cellgroup/cellgroup.service').activateCellGroup(1)
+    ).rejects.toMatchObject({ statusCode: 404 });
+    expect(cgRepository.activate).not.toHaveBeenCalled();
+  });
+
+  it('harus 409 jika CG sudah aktif', async () => {
+    cgRepository.findByIdIncludingDeleted.mockResolvedValue({ id: 1, nama: 'CG A', is_active: 1 });
+
+    await expect(
+      require('../../../../src/modules/cellgroup/cellgroup.service').activateCellGroup(1)
+    ).rejects.toMatchObject({ statusCode: 409, message: 'Cell Group sudah aktif' });
+    expect(cgRepository.activate).not.toHaveBeenCalled();
+  });
+
+  it('harus reaktivasi CG nonaktif dan mencatat audit log ACTIVATE_CG', async () => {
+    cgRepository.findByIdIncludingDeleted.mockResolvedValue({ id: 1, nama: 'CG A', is_active: 0 });
+
+    await require('../../../../src/modules/cellgroup/cellgroup.service')
+      .activateCellGroup(1, { actorUserId: 9 });
+
+    expect(cgRepository.activate).toHaveBeenCalledWith(1);
+    expect(recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ aksi: 'ACTIVATE_CG', modul: 'CELL_GROUP', objectId: 1 })
+    );
   });
 });

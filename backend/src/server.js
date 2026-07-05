@@ -3,6 +3,8 @@ const app = require('./app');
 const { testConnection, closePool } = require('./config/database');
 const { testRedisConnection, closeRedis } = require('./config/redis');
 const { validateEnv } = require('./config/validate-env');
+const { startScoringCron, stopScoringCron } = require('./scripts/scoring-cron');
+const { startReportCleanupJob, stopReportCleanupJob } = require('./modules/report/report-cleanup.job');
 
 const PORT = process.env.PORT || 3000;
 
@@ -37,8 +39,27 @@ async function bootstrap() {
   const server = startServer();
   console.log(`GODS DNA CMS backend running on port ${PORT}`);
 
+  // Job berkala — tidak dipasang saat test:
+  // scoring malam (02:00) + cleanup file laporan kedaluwarsa (tiap 1 jam)
+  if (process.env.NODE_ENV !== 'test') {
+    startScoringCron();
+    startReportCleanupJob();
+  }
+
   const shutdown = async () => {
     console.log('Shutting down gracefully...');
+    stopScoringCron();
+    stopReportCleanupJob();
+
+    // Timeout paksa: jika server.close (menunggu koneksi aktif selesai)
+    // belum tuntas dalam 10 detik, hentikan proses secara paksa agar
+    // deploy/restart tidak menggantung tanpa batas.
+    const forceExitTimer = setTimeout(() => {
+      console.error('Graceful shutdown melewati 10 detik, proses dihentikan paksa.');
+      process.exit(1);
+    }, 10_000);
+    forceExitTimer.unref();
+
     server.close(async () => {
       await closePool();
       await closeRedis();   // ← TAMBAH

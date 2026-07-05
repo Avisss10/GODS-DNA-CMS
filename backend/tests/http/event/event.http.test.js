@@ -203,6 +203,28 @@ describeIfReady('Event Endpoints — REST HTTP Test (server aktif)', () => {
     });
   });
 
+  describe('GET /api/events/:id/kehadiran', () => {
+    it('200 mengembalikan data event_kehadiran yang sudah diinput', async () => {
+      const res = await request(server).get(`/api/events/${eventId}/kehadiran`)
+        .set('Cookie', cookieAdmin);
+      expect(res.status).toBe(200);
+      expect(res.body.event_id).toBe(eventId);
+      expect(res.body.total_hadir).toBe(200);
+      expect(res.body.jemaat_baru).toBe(15);
+    });
+
+    it('404 event tidak ditemukan', async () => {
+      const res = await request(server).get('/api/events/999999/kehadiran')
+        .set('Cookie', cookieAdmin);
+      expect(res.status).toBe(404);
+    });
+
+    it('401 tanpa autentikasi', async () => {
+      const res = await request(server).get(`/api/events/${eventId}/kehadiran`);
+      expect(res.status).toBe(401);
+    });
+  });
+
   describe('GET /api/events/:id/volunteers', () => {
     it('200 mengembalikan array (kosong saat belum ada penugasan)', async () => {
       const res = await request(server).get(`/api/events/${eventId}/volunteers`)

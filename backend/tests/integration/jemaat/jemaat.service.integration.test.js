@@ -14,19 +14,6 @@ const hasFullConfig =
 
 const describeIfReady = hasFullConfig ? describe : describe.skip;
 
-/**
- * Mengonversi Date object (dari kolom DATE TiDB) menjadi string
- * YYYY-MM-DD menggunakan komponen LOKAL (bukan toISOString, yang
- * mengonversi ke UTC dan bisa menggeser tanggal mundur satu hari
- * untuk timezone positif seperti WIB/UTC+7).
- */
-function toDateOnlyString(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
 describeIfReady('jemaat.service — Integration Test (TiDB nyata)', () => {
   let createdId;
 
@@ -59,13 +46,15 @@ describeIfReady('jemaat.service — Integration Test (TiDB nyata)', () => {
   }, 15000);
 
   it('createJemaat harus mengembalikan requiresConfirmation untuk nama+tgl_lahir yang sama', async () => {
-    const pool = getPool();
-    const [rows] = await pool.query('SELECT nama, tgl_lahir FROM jemaat WHERE id = :id', { id: createdId });
-    const existing = rows[0];
+    // nama/tgl_lahir kini tersimpan sebagai ciphertext (migration 005)
+    // — ambil plaintext lewat findById yang mendekripsi otomatis,
+    // bukan raw query ke kolom terenkripsi.
+    const repo = require('../../../src/modules/jemaat/jemaat.repository');
+    const existing = await repo.findById(createdId);
 
     const result = await createJemaat({
       nama: existing.nama,
-      tgl_lahir: toDateOnlyString(existing.tgl_lahir),
+      tgl_lahir: existing.tgl_lahir,
       jenis_kelamin: 'P',
       tgl_bergabung: '2026-06-01',
     });

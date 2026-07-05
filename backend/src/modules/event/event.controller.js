@@ -2,6 +2,7 @@ const eventService = require('./event.service');
 const { EventError } = eventService;
 const eventRepository = require('./event.repository');
 const eventVolunteerRepository = require('./event-volunteer.repository');
+const eventKehadiranRepository = require('./event-kehadiran.repository');
 
 function handleError(err, res) {
   if (err instanceof EventError) {
@@ -85,6 +86,24 @@ async function inputKehadiran(req, res) {
   }
 }
 
+// GET /api/events/:id/kehadiran — baca rekap kehadiran dari event_kehadiran
+// (pasangan baca untuk POST /events/:id/kehadiran yang sudah ada).
+async function getKehadiran(req, res) {
+  try {
+    const eventId = Number(req.params.id);
+    const event = await eventRepository.findById(eventId);
+    if (!event) return res.status(404).json({ message: 'Event tidak ditemukan' });
+
+    const kehadiran = await eventKehadiranRepository.findByEventId(eventId);
+    if (!kehadiran) {
+      return res.status(404).json({ message: 'Data kehadiran event belum diinput' });
+    }
+    return res.status(200).json(kehadiran);
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
 async function listVolunteers(req, res) {
   try {
     const eventId = Number(req.params.id);
@@ -108,6 +127,36 @@ async function assignVolunteer(req, res) {
       { actorUserId }
     );
     return res.status(201).json(result);
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+async function replaceVolunteer(req, res) {
+  try {
+    const eventId = Number(req.params.id);
+    const volunteerId = Number(req.params.volunteerId);
+    const actorUserId = req.user?.userId ?? null;
+    const { replacement_timing, replaced_by, alasan, durasi_menit } = req.body;
+    const result = await eventService.replaceVolunteer(
+      eventId,
+      volunteerId,
+      { replacement_timing, replaced_by, alasan, durasi_menit },
+      { actorUserId }
+    );
+    return res.status(200).json(result);
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+async function cancelVolunteer(req, res) {
+  try {
+    const eventId = Number(req.params.id);
+    const volunteerId = Number(req.params.volunteerId);
+    const actorUserId = req.user?.userId ?? null;
+    const result = await eventService.cancelVolunteerAssignment(eventId, volunteerId, { actorUserId });
+    return res.status(200).json(result);
   } catch (err) {
     return handleError(err, res);
   }
@@ -146,8 +195,11 @@ module.exports = {
   updateEvent,
   updateStatus,
   inputKehadiran,
+  getKehadiran,
   listVolunteers,
   assignVolunteer,
+  replaceVolunteer,
+  cancelVolunteer,
   suggestVolunteers,
   listVolunteerTypeMembers,
 };

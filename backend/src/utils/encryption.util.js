@@ -99,9 +99,26 @@ function decryptJson(ciphertext, ivHex) {
   return JSON.parse(plaintext);
 }
 
+/**
+ * Mendekripsi nilai hanya jika IV-nya tersedia; jika IV NULL/undefined,
+ * nilai diteruskan apa adanya (baris lama yang belum di-backfill masih
+ * plaintext). Dipakai untuk kolom identitas jemaat terenkripsi
+ * (nama/tgl_lahir/jenis_kelamin, migration 005) oleh modul-modul yang
+ * men-JOIN tabel jemaat untuk keperluan tampilan.
+ *
+ * @param {string|null} value ciphertext hex, atau plaintext lama
+ * @param {string|null} ivHex hex string 32 char, atau NULL
+ * @returns {string|null}
+ */
+function decryptOptional(value, ivHex) {
+  if (value === null || value === undefined || !ivHex) return value;
+  return decrypt(value, ivHex);
+}
+
 module.exports = {
   encrypt,
   decrypt,
+  decryptOptional,
   encryptJson,
   decryptJson,
   getEncryptionKey,

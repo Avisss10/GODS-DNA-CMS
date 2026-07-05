@@ -108,6 +108,39 @@ async function uploadPhoto(req, res) {
   }
 }
 
+async function listMeetingPhotos(req, res) {
+  try {
+    const meetingId = Number(req.params.meetingId);
+    const photos = await cgService.listMeetingPhotos(meetingId);
+    return res.status(200).json(photos);
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+async function getPhoto(req, res) {
+  try {
+    const photoId = Number(req.params.photoId);
+    const { absolutePath, contentType } = await cgService.getPhotoFile(photoId);
+
+    res.setHeader('Content-Type', contentType);
+    return res.sendFile(absolutePath);
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+async function deletePhoto(req, res) {
+  try {
+    const photoId = Number(req.params.photoId);
+    const actorUserId = req.user?.userId ?? null;
+    await cgService.deletePhoto(photoId, { actorUserId });
+    return res.status(200).json({ message: 'Foto berhasil dihapus' });
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
 async function getActiveMembersAtMeetingTime(req, res) {
   try {
     const meetingId = Number(req.params.meetingId);
@@ -168,6 +201,17 @@ async function deactivateCellGroup(req, res) {
   }
 }
 
+async function activateCellGroup(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const actorUserId = req.user?.userId ?? null;
+    await cgService.activateCellGroup(id, { actorUserId });
+    return res.status(200).json({ message: 'Cell Group berhasil diaktifkan kembali' });
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
 async function listMeetingsByCg(req, res) {
   try {
     const cgId = Number(req.params.id);
@@ -194,6 +238,7 @@ module.exports = {
   createCellGroup,
   updateCellGroup,
   deactivateCellGroup,
+  activateCellGroup,
   listCellGroups,
   getCellGroupById,
   getActiveMembers,
@@ -203,6 +248,9 @@ module.exports = {
   updateMeeting,
   getMeetingById,
   uploadPhoto,
+  listMeetingPhotos,
+  getPhoto,
+  deletePhoto,
   getActiveMembersAtMeetingTime,
   submitAbsensi,
   listMeetingsByCg,

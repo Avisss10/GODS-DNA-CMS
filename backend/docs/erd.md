@@ -21,9 +21,12 @@ erDiagram
 
     JEMAAT {
         int id PK
-        varchar nama
-        date tgl_lahir
-        enum jenis_kelamin
+        text nama
+        varchar nama_iv
+        text tgl_lahir
+        varchar tgl_lahir_iv
+        text jenis_kelamin
+        varchar jenis_kelamin_iv
         varchar no_hp
         varchar no_hp_iv
         varchar alamat
