@@ -9,6 +9,7 @@ const {
   updateJemaat,
   deleteJemaat,
   viewSensitiveField,
+  viewFullJemaat,
   stripSensitiveFields,
   buildSensitiveChangeFlags,
 } = require('../../../../src/modules/jemaat/jemaat.service');
@@ -185,5 +186,75 @@ describe('jemaat.service — viewSensitiveField (Unit Test)', () => {
     expect(recordAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({ aksi: 'VIEW_SENSITIVE', modul: 'JEMAAT', userId: 7 })
     );
+  });
+});
+
+describe('jemaat.service — viewFullJemaat (Unit Test)', () => {
+  const decryptedRow = {
+    id: 1,
+    nama: 'Budi',
+    nama_iv: 'iv-nama',
+    tgl_lahir: '1990-01-01',
+    tgl_lahir_iv: 'iv-tgl',
+    jenis_kelamin: 'L',
+    jenis_kelamin_iv: 'iv-jk',
+    no_hp: '081234567890',
+    no_hp_iv: 'iv-hp',
+    no_hp_hash: 'hash-hp',
+    alamat: 'Jl. Mawar No. 1',
+    alamat_iv: 'iv-alamat',
+    media_sosial: { instagram: '@budi' },
+    media_sosial_iv: 'iv-medsos',
+    skor_keaktifan: 75,
+    status_keaktifan: 'AKTIF',
+  };
+
+  it('harus melempar JemaatError 404 jika jemaat tidak ditemukan', async () => {
+    jemaatRepository.findByIdDecrypted.mockResolvedValue(null);
+
+    await expect(viewFullJemaat(999)).rejects.toMatchObject({ statusCode: 404 });
+    expect(recordAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('harus mengembalikan semua field sensitif dalam bentuk plaintext', async () => {
+    jemaatRepository.findByIdDecrypted.mockResolvedValue({ ...decryptedRow });
+
+    const result = await viewFullJemaat(1, { actorUserId: 7 });
+
+    expect(result.no_hp).toBe('081234567890');
+    expect(result.alamat).toBe('Jl. Mawar No. 1');
+    expect(result.media_sosial).toEqual({ instagram: '@budi' });
+    expect(result.nama).toBe('Budi');
+    expect(result.skor_keaktifan).toBe(75);
+  });
+
+  it('tidak boleh menyertakan kolom internal ciphertext/IV di hasil', async () => {
+    jemaatRepository.findByIdDecrypted.mockResolvedValue({ ...decryptedRow });
+
+    const result = await viewFullJemaat(1, { actorUserId: 7 });
+
+    expect(result).not.toHaveProperty('no_hp_iv');
+    expect(result).not.toHaveProperty('alamat_iv');
+    expect(result).not.toHaveProperty('media_sosial_iv');
+    expect(result).not.toHaveProperty('nama_iv');
+    expect(result).not.toHaveProperty('tgl_lahir_iv');
+    expect(result).not.toHaveProperty('jenis_kelamin_iv');
+    expect(result).not.toHaveProperty('no_hp_hash');
+  });
+
+  it('harus mencatat TEPAT SATU audit log VIEW_SENSITIVE dengan field ALL', async () => {
+    jemaatRepository.findByIdDecrypted.mockResolvedValue({ ...decryptedRow });
+
+    await viewFullJemaat(1, { actorUserId: 7 });
+
+    expect(recordAuditLog).toHaveBeenCalledTimes(1);
+    expect(recordAuditLog).toHaveBeenCalledWith({
+      userId: 7,
+      aksi: 'VIEW_SENSITIVE',
+      modul: 'JEMAAT',
+      objectId: 1,
+      dataSebelum: null,
+      dataSesudah: { field: 'ALL' },
+    });
   });
 });

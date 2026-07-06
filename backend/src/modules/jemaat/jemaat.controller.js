@@ -50,6 +50,19 @@ async function getById(req, res) {
   }
 }
 
+async function getFull(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const actorUserId = req.user?.userId ?? null;
+
+    const jemaat = await jemaatService.viewFullJemaat(id, { actorUserId });
+
+    return res.status(200).json(jemaat);
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
 async function getSensitiveField(req, res) {
   try {
     const id = Number(req.params.id);
@@ -124,4 +137,4 @@ async function getEventHistory(req, res) {
   }
 }
 
-module.exports = { create, getById, getSensitiveField, update, remove, list, getCellGroups, getEventHistory };
+module.exports = { create, getById, getFull, getSensitiveField, update, remove, list, getCellGroups, getEventHistory };

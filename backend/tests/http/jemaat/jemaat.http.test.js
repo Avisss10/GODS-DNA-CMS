@@ -160,6 +160,49 @@ describeIfReady('Jemaat Endpoints — REST HTTP Test (server aktif)', () => {
     expect(res.status).toBe(404);
   }, 10000);
 
+  describe('GET /api/jemaat/:id/full', () => {
+    it('401 tanpa autentikasi', async () => {
+      const res = await request(server).get(`/api/jemaat/${createdJemaatId}/full`);
+      expect(res.status).toBe(401);
+    }, 10000);
+
+    it('404 untuk id yang tidak ada', async () => {
+      const res = await request(server)
+        .get('/api/jemaat/9999999/full')
+        .set('Cookie', cookieHeader);
+      expect(res.status).toBe(404);
+    }, 10000);
+
+    it('200 mengembalikan field sensitif terdekripsi tanpa kolom internal, dan mencatat TEPAT 1 audit VIEW_SENSITIVE', async () => {
+      const pool = getPool();
+      const [before] = await pool.query(
+        `SELECT COUNT(*) AS total FROM audit_logs
+         WHERE modul = 'JEMAAT' AND aksi = 'VIEW_SENSITIVE' AND object_id = :id`,
+        { id: createdJemaatId }
+      );
+
+      const res = await request(server)
+        .get(`/api/jemaat/${createdJemaatId}/full`)
+        .set('Cookie', cookieHeader);
+
+      expect(res.status).toBe(200);
+      expect(res.body.no_hp).toMatch(/^0814/);
+      expect(res.body.nama).toBeDefined();
+      expect(res.body.no_hp_iv).toBeUndefined();
+      expect(res.body.alamat_iv).toBeUndefined();
+      expect(res.body.media_sosial_iv).toBeUndefined();
+      expect(res.body.nama_iv).toBeUndefined();
+      expect(res.body.no_hp_hash).toBeUndefined();
+
+      const [after] = await pool.query(
+        `SELECT COUNT(*) AS total FROM audit_logs
+         WHERE modul = 'JEMAAT' AND aksi = 'VIEW_SENSITIVE' AND object_id = :id`,
+        { id: createdJemaatId }
+      );
+      expect(Number(after[0].total) - Number(before[0].total)).toBe(1);
+    }, 15000);
+  });
+
   it('GET /api/jemaat/:id/sensitive/no_hp harus mengembalikan plaintext', async () => {
     const res = await request(server)
       .get(`/api/jemaat/${createdJemaatId}/sensitive/no_hp`)

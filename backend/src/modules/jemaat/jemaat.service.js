@@ -205,12 +205,53 @@ async function viewSensitiveField(id, field, { actorUserId = null } = {}) {
   return decrypted[field];
 }
 
+/**
+ * Mengambil data jemaat lengkap dengan SEMUA field sensitif
+ * (no_hp, alamat, media_sosial) dalam bentuk plaintext sekaligus,
+ * dengan SATU audit log VIEW_SENSITIVE (field: 'ALL') — bukan tiga
+ * baris terpisah seperti jika memanggil viewSensitiveField per field.
+ *
+ * Kolom internal ciphertext/IV (no_hp_iv, alamat_iv, media_sosial_iv,
+ * nama_iv, tgl_lahir_iv, jenis_kelamin_iv, no_hp_hash) tidak
+ * disertakan di hasil.
+ *
+ * @param {number} id
+ * @param {object} options
+ * @param {number} options.actorUserId
+ * @returns {Promise<object>}
+ */
+async function viewFullJemaat(id, { actorUserId = null } = {}) {
+  const decrypted = await jemaatRepository.findByIdDecrypted(id);
+  if (!decrypted) {
+    throw new JemaatError('Jemaat tidak ditemukan', 404);
+  }
+
+  await recordAuditLog({
+    userId: actorUserId,
+    aksi: 'VIEW_SENSITIVE',
+    modul: 'JEMAAT',
+    objectId: id,
+    dataSebelum: null,
+    dataSesudah: { field: 'ALL' },
+  });
+
+  const {
+    no_hp_iv, alamat_iv, media_sosial_iv,
+    nama_iv, tgl_lahir_iv, jenis_kelamin_iv,
+    no_hp_hash,
+    ...publicFields
+  } = decrypted;
+
+  return publicFields;
+}
+
 module.exports = {
   JemaatError,
   createJemaat,
   updateJemaat,
   deleteJemaat,
   viewSensitiveField,
+  viewFullJemaat,
   stripSensitiveFields,
   buildSensitiveChangeFlags,
 };

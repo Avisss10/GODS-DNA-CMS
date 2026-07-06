@@ -9,6 +9,7 @@ const router = express.Router();
 router.get('/jemaat', authenticate, controller.list);
 router.post('/jemaat', authenticate, createJemaatValidation, handleValidationErrors, controller.create);
 router.get('/jemaat/:id', authenticate, controller.getById);
+router.get('/jemaat/:id/full', authenticate, controller.getFull);
 router.get('/jemaat/:id/sensitive/:field', authenticate, controller.getSensitiveField);
 router.get('/jemaat/:id/cell-groups', authenticate, controller.getCellGroups);
 router.get('/jemaat/:id/events', authenticate, controller.getEventHistory);
