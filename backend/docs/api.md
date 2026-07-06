@@ -48,6 +48,7 @@ Body: `{ "username": string, "password": string }`
 | GET | `/api/jemaat` | `?search&limit&offset` | `[{ id, nama, ... }]` (field sensitif tidak disertakan) |
 | POST | `/api/jemaat` | `{ nama, tgl_lahir, jenis_kelamin, tgl_bergabung, no_hp?, alamat?, confirmed? }` | 201 · 409 + `duplicates` jika ada kandidat duplikat (kirim `confirmed: true` untuk lanjut) |
 | GET | `/api/jemaat/:id` | — | Detail jemaat · 404 |
+| GET | `/api/jemaat/:id/full` | — | Detail lengkap dengan `no_hp`, `alamat`, `media_sosial` terdekripsi, tanpa kolom internal ciphertext/IV (tercatat 1 audit log VIEW_SENSITIVE field `ALL`) · 404 |
 | GET | `/api/jemaat/:id/sensitive/:field` | field: `no_hp`/`alamat`/dll | `{ field, value }` terdekripsi (tercatat di audit log) |
 | GET | `/api/jemaat/:id/cell-groups` | — | Riwayat CG jemaat |
 | GET | `/api/jemaat/:id/events` | — | Riwayat event jemaat |
@@ -83,9 +84,10 @@ Body: `{ "username": string, "password": string }`
 | Method | Path | Role | Body | Respons singkat |
 |---|---|---|---|---|
 | POST | `/api/volunteer-types` | ADMIN, LEADER | `{ nama, deskripsi? }` | 201 |
-| GET | `/api/volunteer-types` | Semua | — | List jenis volunteer |
+| GET | `/api/volunteer-types` | Semua | — | List SEMUA jenis volunteer (aktif & nonaktif, kolom `is_active` pembeda) |
 | PUT | `/api/volunteer-types/:id` | ADMIN, LEADER | `{ nama?, deskripsi? }` | 200 |
-| DELETE | `/api/volunteer-types/:id` | ADMIN, LEADER | — | 200 |
+| DELETE | `/api/volunteer-types/:id` | ADMIN, LEADER | — | 200 (nonaktif) |
+| PATCH | `/api/volunteer-types/:id/activate` | ADMIN, LEADER | — | 200 (reaktivasi) · 404 tidak ada · 409 sudah aktif |
 | GET | `/api/volunteer-types/:id/members` | Semua | — | Anggota aktif jenis tersebut |
 | GET | `/api/jemaat/:jemaatId/volunteer` | Semua | — | Registrasi volunteer jemaat |
 | POST | `/api/jemaat/:jemaatId/volunteer` | Semua | `{ volunteerTypeId }` | 201 |
@@ -106,6 +108,8 @@ Body: `{ "username": string, "password": string }`
 | POST | `/api/events/:id/volunteers` | Semua | `{ jemaat_id, jenis_id }` | 201 · 409 kuota penuh |
 | PATCH | `/api/events/:id/volunteers/:volunteerId/replace` | Semua | `{ replacement_timing: SEBELUM_EVENT\|TENGAH_EVENT, replaced_by, alasan, durasi_menit? }` | 200 · 400/404/409 |
 | DELETE | `/api/events/:id/volunteers/:volunteerId` | Semua | — | 200 (batalkan penugasan) |
+| GET | `/api/events/:id/volunteer-needs` | Semua | — | `[{ id, volunteer_type_id, nama_jenis, kuota, jumlah_terisi }]` (kosong jika belum diset) · 404 event |
+| PUT | `/api/events/:id/volunteer-needs` | ADMIN, LEADER | `{ needs: [{ jenis_id, kuota ≥ 1 }] }` | Upsert penuh kuota per jenis; jenis yang tidak dikirim dihapus (tanpa batas kuota lagi) · 400 jenis nonaktif/kuota tidak valid · 409 status event final, kuota < penugasan aktif, atau hapus baris yang masih terisi |
 | GET | `/api/events/:id/suggest-volunteers/:jenisId` | Semua | — | Saran volunteer |
 
 ## Audit Log (LEADER only)
@@ -130,7 +134,7 @@ Format: `?format=xlsx|pdf` (default `xlsx`). Jika jumlah record < 500, file lang
 
 | Method | Path | Query | Keterangan |
 |---|---|---|---|
-| GET | `/api/reports/jemaat` | `?sensitive=true&format` | `sensitive=true` menyertakan no_hp & alamat terdekripsi |
+| GET | `/api/reports/jemaat` | `?format` | Selalu menyertakan semua field, dengan `no_hp`, `alamat` & `media_sosial` terdekripsi |
 | GET | `/api/reports/event` | `?eventId&startDate&endDate&format` | Rekap kehadiran event |
 | GET | `/api/reports/cg` | `?cgId&jemaatId&startDate&endDate&format` | Kehadiran CG |
 | GET | `/api/reports/volunteer` | `?jemaatId&eventId&startDate&endDate&format` | Riwayat volunteer |

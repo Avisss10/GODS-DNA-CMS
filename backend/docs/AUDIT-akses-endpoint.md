@@ -73,6 +73,7 @@ Middleware yang dipakai:
 | GET | `/api/volunteer-types` | ✅ | tidak ada | |
 | PUT | `/api/volunteer-types/:id` | ✅ | ADMIN, LEADER | |
 | DELETE | `/api/volunteer-types/:id` | ✅ | ADMIN, LEADER | |
+| PATCH | `/api/volunteer-types/:id/activate` | ✅ | ADMIN, LEADER | Reaktivasi jenis nonaktif; konsisten dengan DELETE-nya |
 | GET | `/api/jemaat/:jemaatId/volunteer` | ✅ | tidak ada | |
 | POST | `/api/jemaat/:jemaatId/volunteer` | ✅ | tidak ada | |
 | DELETE | `/api/jemaat/:jemaatId/volunteer/:volunteerTypeId` | ✅ | tidak ada | |
@@ -93,6 +94,8 @@ Middleware yang dipakai:
 | POST | `/api/events/:id/volunteers` | ✅ | ⚠ tidak ada | Assign volunteer tanpa role |
 | PATCH | `/api/events/:id/volunteers/:volunteerId/replace` | ✅ | ⚠ tidak ada | |
 | DELETE | `/api/events/:id/volunteers/:volunteerId` | ✅ | ⚠ tidak ada | |
+| GET | `/api/events/:id/volunteer-needs` | ✅ | tidak ada | Baca kuota + jumlah terisi per jenis |
+| PUT | `/api/events/:id/volunteer-needs` | ✅ | ADMIN, LEADER | Upsert penuh kuota; transaksi + audit UPDATE_VOLUNTEER_NEEDS |
 | GET | `/api/events/:id/suggest-volunteers/:jenisId` | ✅ | tidak ada | |
 
 **Risiko:** karena `requireRole('ADMIN','LEADER')` mencakup semua peran yang ada, dampak praktisnya nol saat ini — tapi inkonsistensinya membingungkan dan akan jadi lubang jika suatu saat ada peran ketiga.
