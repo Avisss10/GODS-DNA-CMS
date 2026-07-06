@@ -12,6 +12,7 @@ const {
   createVolunteerType,
   updateVolunteerType,
   deactivateVolunteerType,
+  activateVolunteerType,
   registerVolunteer,
   unregisterVolunteer,
 } = require('../../../../src/modules/volunteer/volunteer.service');
@@ -172,5 +173,38 @@ describe('volunteer.service — listVolunteerByJemaat (Unit Test)', () => {
     expect(Array.isArray(result)).toBe(true);
     expect(result[0]).toHaveProperty('volunteer_type_id', 3);
     expect(volunteerMemberRepository.findActiveByJemaat).toHaveBeenCalledWith(1);
+  });
+});
+describe('volunteer.service — activateVolunteerType (Unit Test)', () => {
+  it('harus 404 jika tidak ditemukan', async () => {
+    volunteerJenisRepository.findById.mockResolvedValue(null);
+
+    await expect(activateVolunteerType(999)).rejects.toMatchObject({ statusCode: 404 });
+    expect(volunteerJenisRepository.setActive).not.toHaveBeenCalled();
+  });
+
+  it('harus 409 jika sudah aktif', async () => {
+    volunteerJenisRepository.findById.mockResolvedValue({ id: 1, nama: 'Usher', is_active: 1 });
+
+    await expect(activateVolunteerType(1)).rejects.toMatchObject({ statusCode: 409 });
+    expect(volunteerJenisRepository.setActive).not.toHaveBeenCalled();
+  });
+
+  it('harus berhasil reaktivasi dan mencatat audit log ACTIVATE/VOLUNTEER', async () => {
+    volunteerJenisRepository.findById.mockResolvedValue({ id: 1, nama: 'Usher', is_active: 0 });
+
+    await activateVolunteerType(1, { actorUserId: 9 });
+
+    expect(volunteerJenisRepository.setActive).toHaveBeenCalledWith(1, true);
+    expect(recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 9,
+        aksi: 'ACTIVATE',
+        modul: 'VOLUNTEER',
+        objectId: 1,
+        dataSebelum: { nama: 'Usher', is_active: 0 },
+        dataSesudah: { is_active: true },
+      })
+    );
   });
 });

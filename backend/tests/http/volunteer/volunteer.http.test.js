@@ -201,7 +201,7 @@ describeIfReady('Volunteer Endpoints — REST HTTP Test (server aktif)', () => {
       expect(res.status).toBe(401);
     });
 
-    it('200 mengembalikan array jenis volunteer aktif', async () => {
+    it('200 mengembalikan array jenis volunteer', async () => {
       const res = await request(server)
         .get('/api/volunteer-types')
         .set('Cookie', cookieAdmin);
@@ -209,12 +209,26 @@ describeIfReady('Volunteer Endpoints — REST HTTP Test (server aktif)', () => {
       expect(Array.isArray(res.body)).toBe(true);
     });
 
-    it('200 hasil hanya berisi jenis yang aktif', async () => {
+    it('200 hasil menyertakan jenis NONAKTIF juga (dengan kolom is_active pembeda)', async () => {
+      // Buat jenis baru lalu nonaktifkan — harus tetap muncul di listing
+      const created = await request(server).post('/api/volunteer-types')
+        .set('Cookie', cookieAdmin)
+        .send({ nama: `HTTP Vol Test Nonaktif ${Date.now()}` });
+      expect(created.status).toBe(201);
+      const nonaktifId = created.body.id;
+
+      const delRes = await request(server).delete(`/api/volunteer-types/${nonaktifId}`)
+        .set('Cookie', cookieAdmin);
+      expect(delRes.status).toBe(200);
+
       const res = await request(server)
         .get('/api/volunteer-types')
         .set('Cookie', cookieAdmin);
       expect(res.status).toBe(200);
-      res.body.forEach((vt) => expect(Number(vt.is_active)).toBe(1));
+
+      const row = res.body.find((vt) => vt.id === nonaktifId);
+      expect(row).toBeDefined();
+      expect(Number(row.is_active)).toBe(0);
     });
   });
 
@@ -288,6 +302,51 @@ describeIfReady('Volunteer Endpoints — REST HTTP Test (server aktif)', () => {
         .set('Cookie', cookieAdmin);
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty('message');
+    });
+  });
+
+  // ── PATCH /api/volunteer-types/:id/activate ───────────────────
+  describe('PATCH /api/volunteer-types/:id/activate', () => {
+    it('401 tanpa autentikasi', async () => {
+      const res = await request(server).patch(`/api/volunteer-types/${createdTypeId}/activate`);
+      expect(res.status).toBe(401);
+    });
+
+    it('404 id tidak ditemukan', async () => {
+      const res = await request(server).patch('/api/volunteer-types/999999/activate')
+        .set('Cookie', cookieAdmin);
+      expect(res.status).toBe(404);
+    });
+
+    it('200 ADMIN berhasil reaktivasi jenis yang dinonaktifkan, kembali is_active di listing', async () => {
+      // createdTypeId sudah dinonaktifkan oleh describe DELETE di atas
+      const res = await request(server).patch(`/api/volunteer-types/${createdTypeId}/activate`)
+        .set('Cookie', cookieAdmin);
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe('Jenis volunteer berhasil diaktifkan kembali');
+
+      const listRes = await request(server).get('/api/volunteer-types')
+        .set('Cookie', cookieAdmin);
+      const row = listRes.body.find((vt) => vt.id === createdTypeId);
+      expect(row).toBeDefined();
+      expect(Number(row.is_active)).toBe(1);
+    });
+
+    it('409 jika jenis sudah aktif', async () => {
+      const res = await request(server).patch(`/api/volunteer-types/${createdTypeId}/activate`)
+        .set('Cookie', cookieAdmin);
+      expect(res.status).toBe(409);
+      expect(res.body.message).toBe('Jenis volunteer sudah aktif');
+    });
+
+    it('200 LEADER juga boleh reaktivasi (requireRole ADMIN, LEADER)', async () => {
+      // Nonaktifkan dulu lewat DELETE, lalu aktifkan sebagai LEADER
+      await request(server).delete(`/api/volunteer-types/${createdTypeId}`)
+        .set('Cookie', cookieAdmin);
+
+      const res = await request(server).patch(`/api/volunteer-types/${createdTypeId}/activate`)
+        .set('Cookie', cookieLeader);
+      expect(res.status).toBe(200);
     });
   });
 });

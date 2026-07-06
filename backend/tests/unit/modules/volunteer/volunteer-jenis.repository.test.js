@@ -92,3 +92,22 @@ describe('volunteer-jenis.repository — findAllActive (Unit Test)', () => {
     expect(mockPool.query.mock.calls[0][0]).toMatch(/is_active = TRUE/);
   });
 });
+describe('volunteer-jenis.repository — findAll (Unit Test)', () => {
+  it('harus mengembalikan SEMUA jenis (tanpa filter is_active) beserta jumlah_anggota', async () => {
+    const mockData = [
+      { id: 1, nama: 'Multimedia', is_active: 1, jumlah_anggota: 3 },
+      { id: 2, nama: 'Usher', is_active: 0, jumlah_anggota: 0 },
+    ];
+    const mockPool = { query: jest.fn().mockResolvedValue([mockData]) };
+    getPool.mockReturnValue(mockPool);
+
+    const result = await repo.findAll();
+
+    expect(result).toEqual(mockData);
+    const sql = mockPool.query.mock.calls[0][0];
+    // Jenis nonaktif juga harus ikut — tidak boleh ada filter WHERE is_active
+    expect(sql).not.toMatch(/WHERE\s+vj\.is_active/i);
+    // Join anggota tetap hanya menghitung member aktif
+    expect(sql).toMatch(/vm\.is_active = TRUE/);
+  });
+});

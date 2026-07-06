@@ -44,6 +44,18 @@ async function deleteVolunteerType(req, res) {
   }
 }
 
+// PATCH /api/volunteer-types/:id/activate
+async function activateVolunteerType(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const actorUserId = req.user?.userId ?? null;
+    await volunteerService.activateVolunteerType(id, { actorUserId });
+    return res.status(200).json({ message: 'Jenis volunteer berhasil diaktifkan kembali' });
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
 // GET /api/jemaat/:jemaatId/volunteer
 async function listVolunteerByJemaat(req, res) {
   try {
@@ -106,6 +118,7 @@ module.exports = {
   createVolunteerType,
   updateVolunteerType,
   deleteVolunteerType,
+  activateVolunteerType,
   listVolunteerTypes,
   listVolunteerByJemaat,
   registerVolunteer,

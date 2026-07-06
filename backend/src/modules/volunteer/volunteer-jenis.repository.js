@@ -100,7 +100,10 @@ async function findAllActive() {
 }
 
 /**
- * Ambil semua jenis volunteer aktif beserta jumlah anggota aktif per tipe.
+ * Ambil SEMUA jenis volunteer (aktif maupun nonaktif) beserta jumlah
+ * anggota aktif per tipe. Kolom is_active ikut dikembalikan — frontend
+ * yang membedakan tampilannya. Konsumen yang butuh hanya jenis aktif
+ * (validasi internal dsb.) tetap memakai findAllActive().
  * @returns {Promise<Array<object>>}
  */
 async function findAll() {
@@ -110,7 +113,6 @@ async function findAll() {
             COUNT(vm.id) AS jumlah_anggota
      FROM volunteer_jenis vj
      LEFT JOIN volunteer_members vm ON vm.volunteer_type_id = vj.id AND vm.is_active = TRUE
-     WHERE vj.is_active = TRUE
      GROUP BY vj.id, vj.nama, vj.deskripsi, vj.is_active
      ORDER BY vj.nama ASC`
   );

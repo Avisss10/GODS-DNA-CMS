@@ -42,6 +42,13 @@ router.delete(
   volunteerController.deleteVolunteerType
 );
 
+router.patch(
+  '/volunteer-types/:id/activate',
+  authenticate,
+  requireRole('ADMIN', 'LEADER'),
+  volunteerController.activateVolunteerType
+);
+
 // ── Jemaat ↔ Volunteer (registrasi) ──────────────────────────────
 router.get(
   '/jemaat/:jemaatId/volunteer',

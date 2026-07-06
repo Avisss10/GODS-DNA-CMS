@@ -99,6 +99,37 @@ async function deactivateVolunteerType(id, { actorUserId = null } = {}) {
 }
 
 /**
+ * Reaktivasi jenis volunteer yang sudah dinonaktifkan (kebalikan
+ * deactivateVolunteerType, pola sama seperti activateCellGroup).
+ *
+ * @param {number} id
+ * @param {object} options
+ * @param {number} options.actorUserId
+ * @throws {VolunteerError} 404 jika tidak pernah ada, 409 jika sudah aktif
+ */
+async function activateVolunteerType(id, { actorUserId = null } = {}) {
+  const existing = await volunteerJenisRepository.findById(id);
+  if (!existing) {
+    throw new VolunteerError('Jenis volunteer tidak ditemukan', 404);
+  }
+
+  if (existing.is_active) {
+    throw new VolunteerError('Jenis volunteer sudah aktif', 409);
+  }
+
+  await volunteerJenisRepository.setActive(id, true);
+
+  await recordAuditLog({
+    userId: actorUserId,
+    aksi: 'ACTIVATE',
+    modul: 'VOLUNTEER',
+    objectId: id,
+    dataSebelum: { nama: existing.nama, is_active: existing.is_active },
+    dataSesudah: { is_active: true },
+  });
+}
+
+/**
  * Mendaftarkan jemaat ke sebuah jenis volunteer (BAGIAN keputusan
  * #3): jemaat harus is_active=true dan deleted_at IS NULL. Jemaat
  * baru (is_new_member=true) TETAP boleh didaftarkan di sini —
@@ -196,6 +227,7 @@ module.exports = {
   createVolunteerType,
   updateVolunteerType,
   deactivateVolunteerType,
+  activateVolunteerType,
   listVolunteerByJemaat,
   registerVolunteer,
   unregisterVolunteer,
