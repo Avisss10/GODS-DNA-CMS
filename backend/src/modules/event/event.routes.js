@@ -23,6 +23,8 @@ router.get('/events/:id/volunteers', authenticate, eventController.listVolunteer
 router.post('/events/:id/volunteers', authenticate, assignVolunteerValidation, handleValidationErrors, eventController.assignVolunteer);
 router.patch('/events/:id/volunteers/:volunteerId/replace', authenticate, replaceVolunteerValidation, handleValidationErrors, eventController.replaceVolunteer);
 router.delete('/events/:id/volunteers/:volunteerId', authenticate, eventController.cancelVolunteer);
+router.get('/events/:id/volunteer-needs', authenticate, eventController.getVolunteerNeeds);
+router.put('/events/:id/volunteer-needs', authenticate, requireRole('ADMIN', 'LEADER'), eventController.updateVolunteerNeeds);
 router.get('/events/:id/suggest-volunteers/:jenisId', authenticate, eventController.suggestVolunteers);
 
 // Deferred dari Step 12

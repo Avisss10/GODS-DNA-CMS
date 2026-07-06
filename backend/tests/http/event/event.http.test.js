@@ -16,7 +16,7 @@ const hasFullConfig =
 const describeIfReady = hasFullConfig ? describe : describe.skip;
 
 describeIfReady('Event Endpoints — REST HTTP Test (server aktif)', () => {
-  let server, cookieAdmin, adminUserId, jemaatId, volunteerTypeId, eventId;
+  let server, cookieAdmin, adminUserId, jemaatId, jemaatId2, volunteerTypeId, eventId;
 
   const adminUsername = `test_http_event_admin_${Date.now()}`;
   const testPassword = 'PasswordEventHttp123!';
@@ -35,11 +35,17 @@ describeIfReady('Event Endpoints — REST HTTP Test (server aktif)', () => {
       tgl_lahir: '1990-06-01', jenis_kelamin: 'L', tgl_bergabung: '2024-01-01',
     });
 
+    jemaatId2 = await jemaatRepository.create({
+      nama: `Event HTTP Jemaat Dua ${Date.now()}`,
+      tgl_lahir: '1991-06-01', jenis_kelamin: 'P', tgl_bergabung: '2024-01-01',
+    });
+
     const vt = await volunteerService.createVolunteerType(
       { nama: `EventHTTPVol ${Date.now()}` }, { actorUserId: adminUserId }
     );
     volunteerTypeId = vt.id;
     await volunteerService.registerVolunteer(jemaatId, volunteerTypeId, { actorUserId: adminUserId });
+    await volunteerService.registerVolunteer(jemaatId2, volunteerTypeId, { actorUserId: adminUserId });
 
     server = startServer(0);
     await new Promise((resolve) => server.on('listening', resolve));
@@ -53,8 +59,9 @@ describeIfReady('Event Endpoints — REST HTTP Test (server aktif)', () => {
   afterAll(async () => {
     const pool = getPool();
     if (eventId) {
-      await pool.query('DELETE FROM event_attendances WHERE event_id = :id', { id: eventId }); 
+      await pool.query('DELETE FROM event_attendances WHERE event_id = :id', { id: eventId });
       await pool.query('DELETE FROM event_volunteer WHERE event_id = :id', { id: eventId });
+      await pool.query('DELETE FROM event_volunteer_needs WHERE event_id = :id', { id: eventId });
       await pool.query('DELETE FROM event_kehadiran WHERE event_id = :id', { id: eventId });
       await pool.query('DELETE FROM event WHERE id = :id', { id: eventId });
     }
@@ -63,6 +70,7 @@ describeIfReady('Event Endpoints — REST HTTP Test (server aktif)', () => {
       await pool.query('DELETE FROM volunteer_jenis WHERE id = :id', { id: volunteerTypeId });
     }
     if (jemaatId) await pool.query('DELETE FROM jemaat WHERE id = :id', { id: jemaatId });
+    if (jemaatId2) await pool.query('DELETE FROM jemaat WHERE id = :id', { id: jemaatId2 });
     if (adminUserId) await pool.query('DELETE FROM users WHERE id = :id', { id: adminUserId });
     await pool.query("DELETE FROM audit_logs WHERE modul IN ('EVENT','EVENT_KEHADIRAN','VOLUNTEER','AUTH')");
 
@@ -255,6 +263,113 @@ describeIfReady('Event Endpoints — REST HTTP Test (server aktif)', () => {
     });
   });
 
+  // ── Volunteer needs (kuota) — siklus end-to-end ────────────────
+  // Prasyarat dari describe sebelumnya: event AKTIF dan jemaatId
+  // sudah ditugaskan (1 penugasan AKTIF pada volunteerTypeId).
+  describe('GET & PUT /api/events/:id/volunteer-needs (siklus kuota)', () => {
+    it('GET 401 tanpa autentikasi', async () => {
+      const res = await request(server).get(`/api/events/${eventId}/volunteer-needs`);
+      expect(res.status).toBe(401);
+    });
+
+    it('GET 404 event tidak ditemukan', async () => {
+      const res = await request(server).get('/api/events/999999/volunteer-needs')
+        .set('Cookie', cookieAdmin);
+      expect(res.status).toBe(404);
+    });
+
+    it('GET 200 array kosong saat belum ada baris kebutuhan', async () => {
+      const res = await request(server).get(`/api/events/${eventId}/volunteer-needs`)
+        .set('Cookie', cookieAdmin);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+    });
+
+    it('PUT 400 jika kuota bukan integer >= 1', async () => {
+      const res = await request(server).put(`/api/events/${eventId}/volunteer-needs`)
+        .set('Cookie', cookieAdmin)
+        .send({ needs: [{ jenis_id: volunteerTypeId, kuota: 0 }] });
+      expect(res.status).toBe(400);
+    });
+
+    it('PUT 400 jika jenis_id tidak merujuk jenis volunteer aktif', async () => {
+      const res = await request(server).put(`/api/events/${eventId}/volunteer-needs`)
+        .set('Cookie', cookieAdmin)
+        .send({ needs: [{ jenis_id: 999999, kuota: 2 }] });
+      expect(res.status).toBe(400);
+    });
+
+    it('PUT 200 set kuota 1 — respons menampilkan terisi 1 dari kuota 1', async () => {
+      const res = await request(server).put(`/api/events/${eventId}/volunteer-needs`)
+        .set('Cookie', cookieAdmin)
+        .send({ needs: [{ jenis_id: volunteerTypeId, kuota: 1 }] });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0]).toMatchObject({
+        volunteer_type_id: volunteerTypeId,
+        kuota: 1,
+        jumlah_terisi: 1,
+      });
+      expect(res.body[0].nama_jenis).toBeDefined();
+    });
+
+    it('POST assign jemaat kedua 409 — kuota dari endpoint baru membatasi assignVolunteer', async () => {
+      const res = await request(server).post(`/api/events/${eventId}/volunteers`)
+        .set('Cookie', cookieAdmin)
+        .send({ jemaat_id: jemaatId2, jenis_id: volunteerTypeId });
+      expect(res.status).toBe(409);
+    });
+
+    it('PUT 200 naikkan kuota ke 2', async () => {
+      const res = await request(server).put(`/api/events/${eventId}/volunteer-needs`)
+        .set('Cookie', cookieAdmin)
+        .send({ needs: [{ jenis_id: volunteerTypeId, kuota: 2 }] });
+      expect(res.status).toBe(200);
+      expect(res.body[0].kuota).toBe(2);
+    });
+
+    it('POST assign jemaat kedua kini 201 — kuota baru berlaku', async () => {
+      const res = await request(server).post(`/api/events/${eventId}/volunteers`)
+        .set('Cookie', cookieAdmin)
+        .send({ jemaat_id: jemaatId2, jenis_id: volunteerTypeId });
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('AKTIF');
+    });
+
+    it('PUT 409 turunkan kuota ke 1 di bawah 2 penugasan aktif — pesan menyebut angka', async () => {
+      const res = await request(server).put(`/api/events/${eventId}/volunteer-needs`)
+        .set('Cookie', cookieAdmin)
+        .send({ needs: [{ jenis_id: volunteerTypeId, kuota: 1 }] });
+
+      expect(res.status).toBe(409);
+      expect(res.body.message).toContain('penugasan aktif');
+      expect(res.body.message).toContain('(2)');
+    });
+
+    it('PUT 409 body tanpa jenis tersebut (hapus baris) ditolak selama masih ada penugasan aktif', async () => {
+      const res = await request(server).put(`/api/events/${eventId}/volunteer-needs`)
+        .set('Cookie', cookieAdmin)
+        .send({ needs: [] });
+
+      expect(res.status).toBe(409);
+      expect(res.body.message).toContain('tidak dapat dihapus');
+    });
+
+    it('GET 200 kondisi akhir: kuota 2, jumlah_terisi 2', async () => {
+      const res = await request(server).get(`/api/events/${eventId}/volunteer-needs`)
+        .set('Cookie', cookieAdmin);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0]).toMatchObject({
+        volunteer_type_id: volunteerTypeId,
+        kuota: 2,
+        jumlah_terisi: 2,
+      });
+    });
+  });
+
   describe('GET /api/events/:id/suggest-volunteers/:jenisId', () => {
     it('200 mengembalikan array kandidat', async () => {
       const res = await request(server)
@@ -295,6 +410,13 @@ describeIfReady('Event Endpoints — REST HTTP Test (server aktif)', () => {
         .set('Cookie', cookieAdmin).send({ status: 'SELESAI' });
       expect(res.status).toBe(200);
       expect(res.body.absensi_status).toBe('CLOSED');
+    });
+
+    it('PUT volunteer-needs 409 setelah event SELESAI (di luar DRAFT/PUBLISHED/AKTIF)', async () => {
+      const res = await request(server).put(`/api/events/${eventId}/volunteer-needs`)
+        .set('Cookie', cookieAdmin)
+        .send({ needs: [{ jenis_id: volunteerTypeId, kuota: 5 }] });
+      expect(res.status).toBe(409);
     });
   });
 });

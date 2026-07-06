@@ -4,6 +4,7 @@ jest.mock('../../../../src/modules/event/event-volunteer.repository');
 jest.mock('../../../../src/modules/event/event-volunteer-needs.repository');
 jest.mock('../../../../src/modules/event/event-attendances.repository');
 jest.mock('../../../../src/modules/volunteer/volunteer-member.repository');
+jest.mock('../../../../src/modules/volunteer/volunteer-jenis.repository');
 jest.mock('../../../../src/modules/auditlog/auditlog.repository');
 jest.mock('../../../../src/config/database');
 
@@ -13,6 +14,7 @@ const eventVolunteerRepository = require('../../../../src/modules/event/event-vo
 const eventVolunteerNeedsRepository = require('../../../../src/modules/event/event-volunteer-needs.repository');
 const eventAttendancesRepository = require('../../../../src/modules/event/event-attendances.repository');
 const volunteerMemberRepository = require('../../../../src/modules/volunteer/volunteer-member.repository');
+const volunteerJenisRepository = require('../../../../src/modules/volunteer/volunteer-jenis.repository');
 const { recordAuditLog } = require('../../../../src/modules/auditlog/auditlog.repository');
 const { getPool } = require('../../../../src/config/database');
 
@@ -20,6 +22,7 @@ const {
   createEvent, updateEvent, transitionStatus,
   inputKehadiran, assignVolunteer, replaceVolunteer,
   cancelVolunteerAssignment, suggestVolunteers,
+  getVolunteerNeeds, updateVolunteerNeeds,
   hitungSFrekuensi, hitungSAktif, hitungCompositeScore,
   MAX_TUGAS_REFERENSI,
 } = require('../../../../src/modules/event/event.service');
@@ -46,6 +49,10 @@ beforeEach(() => {
   const mockPool = { getConnection: jest.fn().mockResolvedValue(mockConnection) };
   getPool.mockReturnValue(mockPool);
   eventVolunteerNeedsRepository.findByEventAndJenisForUpdate.mockResolvedValue(null); // default: tanpa kuota didefinisikan
+  eventVolunteerNeedsRepository.findByEventId.mockResolvedValue([]);
+  eventVolunteerNeedsRepository.findByEventIdForUpdate.mockResolvedValue([]);
+  eventVolunteerNeedsRepository.upsertWithConnection.mockResolvedValue();
+  eventVolunteerNeedsRepository.deleteByEventAndJenisWithConnection.mockResolvedValue();
   eventVolunteerRepository.assignWithConnection.mockResolvedValue(7);
   eventVolunteerRepository.countActiveByEventAndJenis.mockResolvedValue(0);
   eventVolunteerRepository.countTugas30HariBatch.mockResolvedValue({});
@@ -775,5 +782,168 @@ describe('event.service — suggestVolunteers (Unit Test)', () => {
     // S_frek = 1 - 4/8 = 0.5, S_aktif = 80/100 = 0.8, S_sesuai = 1.0 (terdaftar)
     // CS = 0.5*0.40 + 0.8*0.30 + 1.0*0.30 = 0.20 + 0.24 + 0.30 = 0.74
     expect(result[0].composite_score).toBeCloseTo(0.74, 5);
+  });
+});
+// ── getVolunteerNeeds ─────────────────────────────────────────────
+describe('event.service — getVolunteerNeeds (Unit Test)', () => {
+  it('harus 404 jika event tidak ditemukan', async () => {
+    eventRepository.findById.mockResolvedValue(null);
+
+    await expect(getVolunteerNeeds(999)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('harus mengembalikan daftar kebutuhan dari repository (array kosong jika belum ada)', async () => {
+    eventRepository.findById.mockResolvedValue({ id: 1, status: 'DRAFT' });
+    const daftar = [
+      { id: 10, volunteer_type_id: 3, nama_jenis: 'Usher', kuota: 2, jumlah_terisi: 1 },
+    ];
+    eventVolunteerNeedsRepository.findByEventId.mockResolvedValue(daftar);
+
+    const result = await getVolunteerNeeds(1);
+
+    expect(result).toEqual(daftar);
+    expect(eventVolunteerNeedsRepository.findByEventId).toHaveBeenCalledWith(1);
+  });
+});
+
+// ── updateVolunteerNeeds ──────────────────────────────────────────
+describe('event.service — updateVolunteerNeeds (Unit Test)', () => {
+  function mockJenisAktif() {
+    volunteerJenisRepository.findById.mockImplementation((id) =>
+      Promise.resolve({ id, nama: `Jenis ${id}`, is_active: 1 })
+    );
+  }
+
+  it('harus 404 jika event tidak ditemukan', async () => {
+    eventRepository.findById.mockResolvedValue(null);
+
+    await expect(updateVolunteerNeeds(999, [])).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('harus 409 jika status event di luar DRAFT/PUBLISHED/AKTIF', async () => {
+    eventRepository.findById.mockResolvedValue({ id: 1, status: 'SELESAI' });
+
+    await expect(updateVolunteerNeeds(1, [{ jenis_id: 3, kuota: 2 }]))
+      .rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it('harus 400 jika needs bukan array', async () => {
+    eventRepository.findById.mockResolvedValue({ id: 1, status: 'DRAFT' });
+
+    await expect(updateVolunteerNeeds(1, undefined)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('harus 400 jika kuota bukan integer >= 1', async () => {
+    eventRepository.findById.mockResolvedValue({ id: 1, status: 'DRAFT' });
+
+    await expect(updateVolunteerNeeds(1, [{ jenis_id: 3, kuota: 0 }]))
+      .rejects.toMatchObject({ statusCode: 400 });
+    await expect(updateVolunteerNeeds(1, [{ jenis_id: 3, kuota: 1.5 }]))
+      .rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('harus 400 jika jenis_id duplikat di body', async () => {
+    eventRepository.findById.mockResolvedValue({ id: 1, status: 'DRAFT' });
+
+    await expect(updateVolunteerNeeds(1, [{ jenis_id: 3, kuota: 2 }, { jenis_id: 3, kuota: 5 }]))
+      .rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('harus 400 jika jenis volunteer tidak ditemukan atau nonaktif', async () => {
+    eventRepository.findById.mockResolvedValue({ id: 1, status: 'DRAFT' });
+    volunteerJenisRepository.findById.mockResolvedValue({ id: 3, nama: 'Usher', is_active: 0 });
+
+    await expect(updateVolunteerNeeds(1, [{ jenis_id: 3, kuota: 2 }]))
+      .rejects.toMatchObject({ statusCode: 400 });
+    expect(mockConnection.beginTransaction).not.toHaveBeenCalled();
+  });
+
+  it('harus 409 dan rollback jika kuota baru lebih kecil dari jumlah penugasan aktif', async () => {
+    eventRepository.findById.mockResolvedValue({ id: 1, status: 'AKTIF' });
+    mockJenisAktif();
+    eventVolunteerRepository.countActiveByEventAndJenis.mockResolvedValue(3);
+
+    await expect(updateVolunteerNeeds(1, [{ jenis_id: 3, kuota: 2 }]))
+      .rejects.toMatchObject({
+        statusCode: 409,
+        message: expect.stringContaining('Jenis 3'),
+      });
+
+    expect(mockConnection.rollback).toHaveBeenCalled();
+    expect(mockConnection.commit).not.toHaveBeenCalled();
+    expect(eventVolunteerNeedsRepository.upsertWithConnection).not.toHaveBeenCalled();
+    expect(recordAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('sukses: lock baris, upsert per jenis, commit, audit UPDATE_VOLUNTEER_NEEDS dengan dataSebelum/dataSesudah', async () => {
+    eventRepository.findById.mockResolvedValue({ id: 1, status: 'PUBLISHED' });
+    mockJenisAktif();
+    eventVolunteerRepository.countActiveByEventAndJenis.mockResolvedValue(1);
+    eventVolunteerNeedsRepository.findByEventIdForUpdate.mockResolvedValue([
+      { id: 10, event_id: 1, volunteer_type_id: 3, kuota: 1 },
+    ]);
+    const daftarBaru = [
+      { id: 10, volunteer_type_id: 3, nama_jenis: 'Jenis 3', kuota: 4, jumlah_terisi: 1 },
+    ];
+    eventVolunteerNeedsRepository.findByEventId.mockResolvedValue(daftarBaru);
+
+    const result = await updateVolunteerNeeds(1, [{ jenis_id: 3, kuota: 4 }], { actorUserId: 9 });
+
+    expect(eventVolunteerNeedsRepository.findByEventIdForUpdate).toHaveBeenCalledWith(mockConnection, 1);
+    expect(eventVolunteerNeedsRepository.upsertWithConnection).toHaveBeenCalledWith(
+      mockConnection, { eventId: 1, jenisId: 3, kuota: 4 }
+    );
+    expect(mockConnection.commit).toHaveBeenCalled();
+    expect(mockConnection.release).toHaveBeenCalled();
+    expect(recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 9,
+        aksi: 'UPDATE_VOLUNTEER_NEEDS',
+        modul: 'EVENT',
+        objectId: 1,
+        dataSebelum: [{ jenis_id: 3, kuota: 1 }],
+        dataSesudah: [{ jenis_id: 3, kuota: 4 }],
+      })
+    );
+    expect(result).toEqual(daftarBaru);
+  });
+
+  it('jenis yang hilang dari body dihapus barisnya jika tidak ada penugasan aktif', async () => {
+    eventRepository.findById.mockResolvedValue({ id: 1, status: 'DRAFT' });
+    mockJenisAktif();
+    eventVolunteerRepository.countActiveByEventAndJenis.mockResolvedValue(0);
+    eventVolunteerNeedsRepository.findByEventIdForUpdate.mockResolvedValue([
+      { id: 10, event_id: 1, volunteer_type_id: 3, kuota: 2 },
+      { id: 11, event_id: 1, volunteer_type_id: 4, kuota: 1 },
+    ]);
+
+    await updateVolunteerNeeds(1, [{ jenis_id: 3, kuota: 2 }], { actorUserId: 9 });
+
+    expect(eventVolunteerNeedsRepository.deleteByEventAndJenisWithConnection)
+      .toHaveBeenCalledWith(mockConnection, 1, 4);
+    expect(mockConnection.commit).toHaveBeenCalled();
+  });
+
+  it('harus 409 dan rollback jika baris yang mau dihapus masih punya penugasan aktif', async () => {
+    eventRepository.findById.mockResolvedValue({ id: 1, status: 'AKTIF' });
+    mockJenisAktif();
+    // jenis 3 (di body): 1 aktif, kuota 2 → OK; jenis 4 (dihapus): 2 aktif → tolak
+    eventVolunteerRepository.countActiveByEventAndJenis.mockImplementation(
+      (conn, eventId, jenisId) => Promise.resolve(jenisId === 4 ? 2 : 1)
+    );
+    eventVolunteerNeedsRepository.findByEventIdForUpdate.mockResolvedValue([
+      { id: 10, event_id: 1, volunteer_type_id: 3, kuota: 2 },
+      { id: 11, event_id: 1, volunteer_type_id: 4, kuota: 3 },
+    ]);
+
+    await expect(updateVolunteerNeeds(1, [{ jenis_id: 3, kuota: 2 }]))
+      .rejects.toMatchObject({
+        statusCode: 409,
+        message: expect.stringContaining('penugasan aktif'),
+      });
+
+    expect(eventVolunteerNeedsRepository.deleteByEventAndJenisWithConnection).not.toHaveBeenCalled();
+    expect(mockConnection.rollback).toHaveBeenCalled();
+    expect(recordAuditLog).not.toHaveBeenCalled();
   });
 });

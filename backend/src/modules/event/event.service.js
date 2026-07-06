@@ -4,6 +4,7 @@ const eventVolunteerRepository = require('./event-volunteer.repository');
 const eventVolunteerNeedsRepository = require('./event-volunteer-needs.repository');
 const eventAttendancesRepository = require('./event-attendances.repository'); // ← TAMBAH
 const volunteerMemberRepository = require('../volunteer/volunteer-member.repository');
+const volunteerJenisRepository = require('../volunteer/volunteer-jenis.repository');
 const { recordAuditLog } = require('../auditlog/auditlog.repository');
 const { getPool } = require('../../config/database');
 
@@ -423,6 +424,145 @@ async function cancelVolunteerAssignment(eventId, volunteerId, { actorUserId = n
 }
 
 /**
+ * Daftar kebutuhan (kuota) volunteer sebuah event, beserta nama jenis
+ * dan jumlah penugasan AKTIF per jenis ("terisi X dari kuota Y").
+ * Event tanpa baris kebutuhan → array kosong, bukan error.
+ *
+ * @param {number} eventId
+ * @returns {Promise<Array<{ id, volunteer_type_id, nama_jenis, kuota, jumlah_terisi }>>}
+ */
+async function getVolunteerNeeds(eventId) {
+  const event = await eventRepository.findById(eventId);
+  if (!event) throw new EventError('Event tidak ditemukan', 404);
+
+  return eventVolunteerNeedsRepository.findByEventId(eventId);
+}
+
+/**
+ * Upsert penuh kebutuhan (kuota) volunteer sebuah event:
+ * - baris di body di-insert/update kuotanya;
+ * - baris di DB yang tidak ada di body DIHAPUS (kembali ke perilaku
+ *   tanpa batas kuota) — hanya jika tidak ada penugasan AKTIF-nya;
+ * - kuota tidak boleh lebih kecil dari jumlah penugasan AKTIF yang
+ *   sudah ada (tidak boleh ada state kuota-terlampaui).
+ * Seluruh mutasi berjalan dalam satu transaksi; baris kebutuhan
+ * di-lock FOR UPDATE agar tidak balapan dengan assignVolunteer.
+ *
+ * @param {number} eventId
+ * @param {Array<{ jenis_id: number, kuota: number }>} needs
+ * @param {{ actorUserId?: number }} options
+ * @returns {Promise<Array<object>>} daftar kebutuhan terbaru (bentuk getVolunteerNeeds)
+ */
+async function updateVolunteerNeeds(eventId, needs, { actorUserId = null } = {}) {
+  const event = await eventRepository.findById(eventId);
+  if (!event) throw new EventError('Event tidak ditemukan', 404);
+
+  if (!VOLUNTEER_MUTABLE_EVENT_STATUSES.includes(event.status)) {
+    throw new EventError(
+      'Kebutuhan volunteer hanya dapat diubah pada event DRAFT, PUBLISHED, atau AKTIF',
+      409
+    );
+  }
+
+  if (!Array.isArray(needs)) {
+    throw new EventError('needs wajib berupa array berisi { jenis_id, kuota }', 400);
+  }
+
+  const jenisTerlihat = new Set();
+  for (const item of needs) {
+    const jenisId = Number(item?.jenis_id);
+    const kuota = Number(item?.kuota);
+    if (!Number.isInteger(jenisId) || jenisId < 1) {
+      throw new EventError('jenis_id wajib berupa integer positif', 400);
+    }
+    if (!Number.isInteger(kuota) || kuota < 1) {
+      throw new EventError('kuota wajib berupa integer minimal 1', 400);
+    }
+    if (jenisTerlihat.has(jenisId)) {
+      throw new EventError(`jenis_id ${jenisId} muncul lebih dari satu kali di body`, 400);
+    }
+    jenisTerlihat.add(jenisId);
+  }
+
+  // Validasi jenis harus ada dan AKTIF; kumpulkan nama untuk pesan error
+  const namaJenisById = new Map();
+  for (const jenisId of jenisTerlihat) {
+    const jenis = await volunteerJenisRepository.findById(jenisId);
+    if (!jenis || !jenis.is_active) {
+      throw new EventError(
+        `Jenis volunteer dengan id ${jenisId} tidak ditemukan atau tidak aktif`,
+        400
+      );
+    }
+    namaJenisById.set(jenisId, jenis.nama);
+  }
+
+  const targetByJenis = new Map(
+    needs.map((item) => [Number(item.jenis_id), Number(item.kuota)])
+  );
+
+  const pool = getPool();
+  const connection = await pool.getConnection();
+  let dataSebelum;
+  try {
+    await connection.beginTransaction();
+
+    const existingRows = await eventVolunteerNeedsRepository.findByEventIdForUpdate(connection, eventId);
+    dataSebelum = existingRows.map((row) => ({
+      jenis_id: row.volunteer_type_id,
+      kuota: row.kuota,
+    }));
+
+    // Upsert setiap jenis di body — kuota tidak boleh di bawah jumlah
+    // penugasan AKTIF yang sudah ada
+    for (const [jenisId, kuota] of targetByJenis) {
+      const jumlahAktif = await eventVolunteerRepository.countActiveByEventAndJenis(connection, eventId, jenisId);
+      if (kuota < jumlahAktif) {
+        throw new EventError(
+          `Kuota jenis "${namaJenisById.get(jenisId)}" (${kuota}) lebih kecil dari jumlah penugasan aktif saat ini (${jumlahAktif})`,
+          409
+        );
+      }
+      await eventVolunteerNeedsRepository.upsertWithConnection(connection, { eventId, jenisId, kuota });
+    }
+
+    // Hapus baris DB yang tidak ada di body — hanya jika tidak ada
+    // penugasan AKTIF pada jenis tersebut
+    for (const row of existingRows) {
+      if (targetByJenis.has(row.volunteer_type_id)) continue;
+
+      const jumlahAktif = await eventVolunteerRepository.countActiveByEventAndJenis(connection, eventId, row.volunteer_type_id);
+      if (jumlahAktif > 0) {
+        const jenis = await volunteerJenisRepository.findById(row.volunteer_type_id);
+        throw new EventError(
+          `Kebutuhan jenis "${jenis ? jenis.nama : row.volunteer_type_id}" tidak dapat dihapus karena masih ada ${jumlahAktif} penugasan aktif`,
+          409
+        );
+      }
+      await eventVolunteerNeedsRepository.deleteByEventAndJenisWithConnection(connection, eventId, row.volunteer_type_id);
+    }
+
+    await connection.commit();
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+
+  await recordAuditLog({
+    userId: actorUserId,
+    aksi: 'UPDATE_VOLUNTEER_NEEDS',
+    modul: 'EVENT',
+    objectId: eventId,
+    dataSebelum,
+    dataSesudah: [...targetByJenis].map(([jenis_id, kuota]) => ({ jenis_id, kuota })),
+  });
+
+  return eventVolunteerNeedsRepository.findByEventId(eventId);
+}
+
+/**
  * Auto-Suggest Volunteer (BAB II §2.5.1): mengembalikan kandidat yang
  * belum ditugaskan pada event+jenis ini, diurutkan descending
  * berdasarkan composite score. Dua pengecualian diterapkan SEBELUM
@@ -486,6 +626,8 @@ module.exports = {
   assignVolunteer,
   replaceVolunteer,
   cancelVolunteerAssignment,
+  getVolunteerNeeds,
+  updateVolunteerNeeds,
   suggestVolunteers,
   hitungSFrekuensi,
   hitungSAktif,
