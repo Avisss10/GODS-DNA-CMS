@@ -151,6 +151,85 @@ async function hitungSkorJemaat(jemaatId, jemaatData) {
 }
 
 /**
+ * Proses scoring SATU jemaat sampai tuntas: hitung skor (termasuk
+ * anti-cliff), simpan skor/status ke DB, catat audit log. Dipakai
+ * bersama oleh batch malam (runScoringBatch) dan pembaruan real-time
+ * (updateSkorRealtimeJemaat) agar logikanya tidak terduplikasi.
+ *
+ * @param {{ id, skor_keaktifan, status_keaktifan }} jemaat
+ * @param {{ actorUserId?: number }} options
+ * @returns {Promise<{ skorBaru: number, statusBaru: string, isNonCg: boolean }>}
+ */
+async function prosesScoringJemaat(jemaat, { actorUserId = null } = {}) {
+  const { skorBaru, statusBaru, isNonCg } = await hitungSkorJemaat(jemaat.id, jemaat);
+
+  await scoringRepository.updateSkor(jemaat.id, skorBaru, statusBaru, isNonCg);
+
+  await recordAuditLog({
+    userId: actorUserId,
+    aksi: 'UPDATE',
+    modul: 'SCORING',
+    objectId: jemaat.id,
+    dataSebelum: {
+      skor_keaktifan: jemaat.skor_keaktifan,
+      status_keaktifan: jemaat.status_keaktifan,
+    },
+    dataSesudah: {
+      skor_keaktifan: skorBaru,
+      status_keaktifan: statusBaru,
+    },
+  });
+
+  return { skorBaru, statusBaru, isNonCg };
+}
+
+/**
+ * Pembaruan skor real-time untuk satu jemaat, dengan kriteria
+ * kelayakan yang sama seperti batch malam: jemaat tidak aktif /
+ * sudah dihapus / masih grace period (is_new_member) di-skip.
+ *
+ * @param {number} jemaatId
+ * @param {{ actorUserId?: number }} options
+ * @returns {Promise<{ skorBaru, statusBaru, isNonCg } | null>} null jika di-skip
+ */
+async function updateSkorRealtimeJemaat(jemaatId, { actorUserId = null } = {}) {
+  const jemaat = await scoringRepository.getJemaatScoringData(jemaatId);
+  if (!jemaat || jemaat.is_new_member) return null;
+
+  return prosesScoringJemaat(jemaat, { actorUserId });
+}
+
+/**
+ * Fire-and-forget: jadwalkan pembaruan skor real-time untuk sejumlah
+ * jemaat TANPA menunggu hasilnya. Dipanggil controller SETELAH respons
+ * dikirim ke klien — tidak menambah latency request dan tidak pernah
+ * menggagalkan request utama (error hanya di-console.error).
+ *
+ * @param {Array<number>} jemaatIds
+ * @param {{ actorUserId?: number }} options
+ */
+function triggerSkorUpdate(jemaatIds, { actorUserId = null } = {}) {
+  const uniqueIds = [
+    ...new Set(
+      (jemaatIds || [])
+        .map(Number)
+        .filter((id) => Number.isInteger(id) && id > 0)
+    ),
+  ];
+  if (uniqueIds.length === 0) return;
+
+  setImmediate(async () => {
+    for (const jemaatId of uniqueIds) {
+      try {
+        await updateSkorRealtimeJemaat(jemaatId, { actorUserId });
+      } catch (err) {
+        console.error(`Realtime scoring error untuk jemaat ${jemaatId}:`, err.message);
+      }
+    }
+  });
+}
+
+/**
  * Jalankan scoring untuk semua jemaat yang memenuhi syarat.
  * Sesuai BAGIAN 6.3:
  * - Skip jemaat baru (is_new_member = true)
@@ -175,24 +254,7 @@ async function runScoringBatch({ actorUserId = null } = {}) {
 
     for (const jemaat of chunk) {
       try {
-        const { skorBaru, statusBaru, isNonCg } = await hitungSkorJemaat(jemaat.id, jemaat);
-
-        await scoringRepository.updateSkor(jemaat.id, skorBaru, statusBaru, isNonCg);
-
-        await recordAuditLog({
-          userId: actorUserId,
-          aksi: 'UPDATE',
-          modul: 'SCORING',
-          objectId: jemaat.id,
-          dataSebelum: {
-            skor_keaktifan: jemaat.skor_keaktifan,
-            status_keaktifan: jemaat.status_keaktifan,
-          },
-          dataSesudah: {
-            skor_keaktifan: skorBaru,
-            status_keaktifan: statusBaru,
-          },
-        });
+        await prosesScoringJemaat(jemaat, { actorUserId });
 
         processed++;
       } catch (err) {
@@ -213,5 +275,8 @@ module.exports = {
   hitungNilaiCG,
   hitungNilaiEvent,
   hitungSkorJemaat,
+  prosesScoringJemaat,
+  updateSkorRealtimeJemaat,
+  triggerSkorUpdate,
   runScoringBatch,
 };

@@ -66,6 +66,10 @@ describeIfReady('Cell Group Endpoints — REST HTTP Test (server aktif)', () => 
     await pool.query('DELETE FROM jemaat WHERE id IN (:leaderId, :memberId)', { leaderId, memberId });
     await pool.query('DELETE FROM users WHERE id = :id', { id: testUserId });
     await pool.query('DELETE FROM audit_logs WHERE modul IN (:m1, :m2)', { m1: 'CELL_GROUP', m2: 'AUTH' });
+    await pool.query(
+      'DELETE FROM audit_logs WHERE modul = :modul AND object_id IN (:leaderId, :memberId)',
+      { modul: 'SCORING', leaderId, memberId }
+    );
 
     const redis = getRedisClient();
     await redis.del(`active_session:${testUserId}`);
@@ -316,6 +320,42 @@ describeIfReady('Cell Group Endpoints — REST HTTP Test (server aktif)', () => 
 
     expect(res.status).toBe(200);
   }, 10000);
+
+  it('POST absensi harus memicu pembaruan skor real-time (fire-and-forget) setelah respons', async () => {
+    const pool = getPool();
+    // Jadikan leader bukan jemaat baru agar memenuhi syarat scoring
+    // (jemaat baru di-skip, sama seperti batch malam).
+    await pool.query('UPDATE jemaat SET is_new_member = FALSE WHERE id = :id', { id: leaderId });
+
+    const res = await request(server)
+      .post(`/api/cell-groups/meetings/${meetingId}/absensi`)
+      .set('Cookie', cookieHeader)
+      .send({ absensi: [{ jemaatId: leaderId, hadir: true }] });
+
+    expect(res.status).toBe(200);
+
+    // Pekerjaan berjalan fire-and-forget setelah respons — poll audit
+    // log SCORING (bukti skor dihitung & disimpan) hingga muncul.
+    let auditCount = 0;
+    for (let attempt = 0; attempt < 20 && auditCount === 0; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const [rows] = await pool.query(
+        `SELECT COUNT(*) AS total FROM audit_logs
+         WHERE modul = 'SCORING' AND aksi = 'UPDATE' AND object_id = :id`,
+        { id: leaderId }
+      );
+      auditCount = Number(rows[0].total);
+    }
+    expect(auditCount).toBeGreaterThanOrEqual(1);
+
+    // Skor tersimpan di tabel jemaat (leader hadir 1/1 meeting CG →
+    // skor naik dari 0, dibatasi anti-cliff)
+    const [jemaatRows] = await pool.query(
+      'SELECT skor_keaktifan, status_keaktifan FROM jemaat WHERE id = :id',
+      { id: leaderId }
+    );
+    expect(Number(jemaatRows[0].skor_keaktifan)).toBeGreaterThan(0);
+  }, 20000);
 
   it('DELETE /api/cell-groups/:id/members/:jemaatId harus berhasil mengeluarkan anggota', async () => {
     const res = await request(server)

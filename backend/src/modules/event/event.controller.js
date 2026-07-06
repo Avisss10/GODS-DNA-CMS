@@ -3,6 +3,7 @@ const { EventError } = eventService;
 const eventRepository = require('./event.repository');
 const eventVolunteerRepository = require('./event-volunteer.repository');
 const eventKehadiranRepository = require('./event-kehadiran.repository');
+const scoringService = require('../scoring/scoring.service');
 
 function handleError(err, res) {
   if (err instanceof EventError) {
@@ -126,7 +127,12 @@ async function assignVolunteer(req, res) {
       { jemaat_id, jenis_id },
       { actorUserId }
     );
-    return res.status(201).json(result);
+    res.status(201).json(result);
+
+    // Skor keaktifan real-time untuk jemaat yang ditugaskan —
+    // fire-and-forget setelah respons terkirim.
+    scoringService.triggerSkorUpdate([jemaat_id], { actorUserId });
+    return res;
   } catch (err) {
     return handleError(err, res);
   }
@@ -144,7 +150,15 @@ async function replaceVolunteer(req, res) {
       { replacement_timing, replaced_by, alasan, durasi_menit },
       { actorUserId }
     );
-    return res.status(200).json(result);
+    res.status(200).json(result);
+
+    // Skor keaktifan real-time untuk jemaat yang digantikan DAN
+    // jemaat pengganti — fire-and-forget setelah respons terkirim.
+    scoringService.triggerSkorUpdate(
+      [result.penugasan_lama?.jemaat_id, result.penugasan_baru?.jemaat_id],
+      { actorUserId }
+    );
+    return res;
   } catch (err) {
     return handleError(err, res);
   }
@@ -156,6 +170,34 @@ async function cancelVolunteer(req, res) {
     const volunteerId = Number(req.params.volunteerId);
     const actorUserId = req.user?.userId ?? null;
     const result = await eventService.cancelVolunteerAssignment(eventId, volunteerId, { actorUserId });
+    res.status(200).json(result);
+
+    // Skor keaktifan real-time untuk jemaat yang penugasannya
+    // dibatalkan — fire-and-forget setelah respons terkirim.
+    scoringService.triggerSkorUpdate([result?.jemaat_id], { actorUserId });
+    return res;
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+// GET /api/events/:id/volunteer-needs
+async function getVolunteerNeeds(req, res) {
+  try {
+    const eventId = Number(req.params.id);
+    const result = await eventService.getVolunteerNeeds(eventId);
+    return res.status(200).json(result);
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+// PUT /api/events/:id/volunteer-needs
+async function updateVolunteerNeeds(req, res) {
+  try {
+    const eventId = Number(req.params.id);
+    const actorUserId = req.user?.userId ?? null;
+    const result = await eventService.updateVolunteerNeeds(eventId, req.body?.needs, { actorUserId });
     return res.status(200).json(result);
   } catch (err) {
     return handleError(err, res);
@@ -200,6 +242,8 @@ module.exports = {
   assignVolunteer,
   replaceVolunteer,
   cancelVolunteer,
+  getVolunteerNeeds,
+  updateVolunteerNeeds,
   suggestVolunteers,
   listVolunteerTypeMembers,
 };

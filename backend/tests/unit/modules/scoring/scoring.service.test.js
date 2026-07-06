@@ -10,6 +10,8 @@ const {
   hitungNilaiCG,
   hitungNilaiEvent,
   hitungSkorJemaat,
+  updateSkorRealtimeJemaat,
+  triggerSkorUpdate,
   runScoringBatch,
 } = require('../../../../src/modules/scoring/scoring.service');
 
@@ -159,6 +161,148 @@ describe('scoring.service — hitungSkorJemaat (Unit Test)', () => {
     // Skor lama 80, skor mentah baru = 0, anti-cliff → max turun -15 = 65
     const { skorBaru } = await hitungSkorJemaat(1, { skor_keaktifan: 80, is_non_cg: true });
     expect(skorBaru).toBe(65);
+  });
+});
+
+// ── updateSkorRealtimeJemaat ──────────────────────────────────────
+describe('scoring.service — updateSkorRealtimeJemaat (Unit Test)', () => {
+  function mockKalkulasiKosong() {
+    scoringRepository.isActiveCGMember.mockResolvedValue(false);
+    scoringRepository.getRecentEvents.mockResolvedValue([]);
+    scoringRepository.getVolunteerAssignments.mockResolvedValue([]);
+    scoringRepository.getEventAttendances.mockResolvedValue([]);
+    scoringRepository.updateSkor.mockResolvedValue();
+  }
+
+  it('harus return null tanpa update jika jemaat tidak ditemukan/tidak aktif', async () => {
+    scoringRepository.getJemaatScoringData.mockResolvedValue(null);
+
+    const result = await updateSkorRealtimeJemaat(999);
+
+    expect(result).toBeNull();
+    expect(scoringRepository.updateSkor).not.toHaveBeenCalled();
+    expect(recordAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('harus skip jemaat baru (is_new_member) — sama seperti batch malam', async () => {
+    scoringRepository.getJemaatScoringData.mockResolvedValue({
+      id: 1, skor_keaktifan: 0, status_keaktifan: 'BELUM_CUKUP_DATA',
+      is_non_cg: true, is_new_member: true,
+    });
+
+    const result = await updateSkorRealtimeJemaat(1);
+
+    expect(result).toBeNull();
+    expect(scoringRepository.updateSkor).not.toHaveBeenCalled();
+  });
+
+  it('harus hitung skor (dengan anti-cliff), simpan ke DB, dan catat audit log SCORING', async () => {
+    scoringRepository.getJemaatScoringData.mockResolvedValue({
+      id: 1, skor_keaktifan: 80, status_keaktifan: 'AKTIF',
+      is_non_cg: true, is_new_member: false,
+    });
+    mockKalkulasiKosong();
+
+    const result = await updateSkorRealtimeJemaat(1, { actorUserId: 7 });
+
+    // Skor lama 80, skor mentah 0 → anti-cliff max turun -15 = 65
+    expect(result).toMatchObject({ skorBaru: 65, statusBaru: 'AKTIF' });
+    expect(scoringRepository.updateSkor).toHaveBeenCalledWith(1, 65, 'AKTIF', true);
+    expect(recordAuditLog).toHaveBeenCalledTimes(1);
+    expect(recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 7,
+        aksi: 'UPDATE',
+        modul: 'SCORING',
+        objectId: 1,
+        dataSebelum: { skor_keaktifan: 80, status_keaktifan: 'AKTIF' },
+        dataSesudah: { skor_keaktifan: 65, status_keaktifan: 'AKTIF' },
+      })
+    );
+  });
+});
+
+// ── triggerSkorUpdate ─────────────────────────────────────────────
+describe('scoring.service — triggerSkorUpdate (Unit Test, fire-and-forget)', () => {
+  // Tunggu pekerjaan setImmediate + rantai promise di dalamnya selesai
+  async function flushFireAndForget() {
+    for (let i = 0; i < 20; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  }
+
+  function mockKalkulasiKosong() {
+    scoringRepository.isActiveCGMember.mockResolvedValue(false);
+    scoringRepository.getRecentEvents.mockResolvedValue([]);
+    scoringRepository.getVolunteerAssignments.mockResolvedValue([]);
+    scoringRepository.getEventAttendances.mockResolvedValue([]);
+    scoringRepository.updateSkor.mockResolvedValue();
+  }
+
+  it('harus return langsung (sinkron) tanpa menunggu scoring selesai', async () => {
+    scoringRepository.getJemaatScoringData.mockResolvedValue({
+      id: 1, skor_keaktifan: 0, status_keaktifan: 'TIDAK_AKTIF',
+      is_non_cg: true, is_new_member: false,
+    });
+    mockKalkulasiKosong();
+
+    const result = triggerSkorUpdate([1]);
+
+    expect(result).toBeUndefined();
+    // Belum ada pekerjaan yang berjalan pada saat return
+    expect(scoringRepository.getJemaatScoringData).not.toHaveBeenCalled();
+
+    // Drain pekerjaan yang dijadwalkan agar tidak bocor ke test lain
+    await flushFireAndForget();
+    expect(scoringRepository.getJemaatScoringData).toHaveBeenCalledTimes(1);
+  });
+
+  it('harus memproses setiap jemaat unik (deduplikasi id)', async () => {
+    scoringRepository.getJemaatScoringData.mockResolvedValue({
+      id: 1, skor_keaktifan: 0, status_keaktifan: 'TIDAK_AKTIF',
+      is_non_cg: true, is_new_member: false,
+    });
+    mockKalkulasiKosong();
+
+    triggerSkorUpdate([1, 1, 2, '2', 3], { actorUserId: 5 });
+    await flushFireAndForget();
+
+    expect(scoringRepository.getJemaatScoringData).toHaveBeenCalledTimes(3);
+    expect(scoringRepository.getJemaatScoringData).toHaveBeenCalledWith(1);
+    expect(scoringRepository.getJemaatScoringData).toHaveBeenCalledWith(2);
+    expect(scoringRepository.getJemaatScoringData).toHaveBeenCalledWith(3);
+  });
+
+  it('harus mengabaikan input kosong dan id tidak valid', async () => {
+    triggerSkorUpdate([]);
+    triggerSkorUpdate(undefined);
+    triggerSkorUpdate([null, undefined, 'abc', -1, 0]);
+    await flushFireAndForget();
+
+    expect(scoringRepository.getJemaatScoringData).not.toHaveBeenCalled();
+  });
+
+  it('error pada satu jemaat hanya di-console.error, jemaat lain tetap diproses', async () => {
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    scoringRepository.getJemaatScoringData
+      .mockRejectedValueOnce(new Error('DB error'))
+      .mockResolvedValueOnce({
+        id: 2, skor_keaktifan: 0, status_keaktifan: 'TIDAK_AKTIF',
+        is_non_cg: true, is_new_member: false,
+      });
+    mockKalkulasiKosong();
+
+    triggerSkorUpdate([1, 2]);
+    await flushFireAndForget();
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('jemaat 1'),
+      'DB error'
+    );
+    expect(scoringRepository.updateSkor).toHaveBeenCalledTimes(1);
+    expect(scoringRepository.updateSkor).toHaveBeenCalledWith(2, expect.any(Number), expect.any(String), true);
+
+    consoleSpy.mockRestore();
   });
 });
 

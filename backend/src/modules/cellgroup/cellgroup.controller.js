@@ -1,6 +1,7 @@
 const cgService = require('./cellgroup.service');
 const cgRepository = require('./cellgroup.repository');
 const meetingRepository = require('./cellgroup-meeting.repository');
+const scoringService = require('../scoring/scoring.service');
 const { CellGroupError } = cgService;
 
 
@@ -159,8 +160,18 @@ async function submitAbsensi(req, res) {
   try {
     const meetingId = Number(req.params.meetingId);
     const actorUserId = req.user?.userId ?? null;
-    await cgService.submitAbsensi(meetingId, req.body.absensi, { actorUserId });
-    return res.status(200).json({ message: 'Absensi berhasil disimpan' });
+    const absensiList = req.body.absensi;
+    await cgService.submitAbsensi(meetingId, absensiList, { actorUserId });
+    res.status(200).json({ message: 'Absensi berhasil disimpan' });
+
+    // Skor keaktifan real-time untuk setiap jemaat yang diabsen —
+    // fire-and-forget setelah respons terkirim (cron malam tetap
+    // berjalan sebagai penyapu).
+    scoringService.triggerSkorUpdate(
+      absensiList.map((a) => a.jemaatId),
+      { actorUserId }
+    );
+    return res;
   } catch (err) {
     return handleError(err, res);
   }

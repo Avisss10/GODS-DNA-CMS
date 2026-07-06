@@ -179,6 +179,28 @@ async function getJemaatForScoring({ limit, offset } = {}) {
   return rows;
 }
 
+/**
+ * Ambil data scoring SATU jemaat, dengan kriteria kelayakan yang sama
+ * seperti getJemaatForScoring (is_active, belum dihapus). Kolom
+ * is_new_member ikut dikembalikan agar caller bisa menerapkan skip
+ * grace period yang sama dengan batch malam.
+ * @param {number} jemaatId
+ * @returns {Promise<object|null>}
+ */
+async function getJemaatScoringData(jemaatId) {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    `SELECT id, skor_keaktifan, status_keaktifan, is_non_cg, is_new_member
+     FROM jemaat
+     WHERE id = :jemaatId
+       AND is_active = TRUE
+       AND deleted_at IS NULL
+     LIMIT 1`,
+    { jemaatId }
+  );
+  return rows[0] || null;
+}
+
 module.exports = {
   getCGAttendanceSummary,
   getRecentEvents,
@@ -187,4 +209,5 @@ module.exports = {
   isActiveCGMember,
   updateSkor,
   getJemaatForScoring,
+  getJemaatScoringData,
 };
