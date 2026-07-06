@@ -34,12 +34,8 @@ function sendReportResult(res, result) {
 async function jemaatReport(req, res) {
   try {
     const actorUserId = req.user?.userId ?? null;
-    const includeSensitive = req.query.sensitive === 'true';
     const format = req.query.format;
-    const result = await reportService.generateJemaatReport(
-      { includeSensitive, format },
-      { actorUserId }
-    );
+    const result = await reportService.generateJemaatReport({ format }, { actorUserId });
     return sendReportResult(res, result);
   } catch (err) {
     return handleError(err, res);

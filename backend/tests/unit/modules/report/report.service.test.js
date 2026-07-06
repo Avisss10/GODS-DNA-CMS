@@ -9,7 +9,7 @@ const { PassThrough } = require('stream');
 const ExcelJS = require('exceljs');
 const reportRepository = require('../../../../src/modules/report/report.repository');
 const { recordAuditLog } = require('../../../../src/modules/auditlog/auditlog.repository');
-const { decrypt } = require('../../../../src/utils/encryption.util');
+const { decrypt, decryptJson } = require('../../../../src/utils/encryption.util');
 const { getRedisClient } = require('../../../../src/config/redis');
 const { notifyLeaders } = require('../../../../src/modules/notification/notification.stub');
 
@@ -41,6 +41,7 @@ beforeEach(() => {
   recordAuditLog.mockResolvedValue(1);
   notifyLeaders.mockResolvedValue(undefined);
   decrypt.mockImplementation((val) => `decrypted:${val}`);
+  decryptJson.mockImplementation((val) => ({ instagram: `decrypted:${val}` }));
 
   // Signed-URL store sekarang di Redis (audit item 3). Mock in-memory
   // sederhana agar one-time-use (GETDEL) tetap teruji.
@@ -58,25 +59,34 @@ beforeEach(() => {
 
 // ── dekripsiBarisJemaat ───────────────────────────────────────────
 describe('report.service — dekripsiBarisJemaat (Unit Test)', () => {
-  it('harus dekripsi no_hp dan alamat jika ada IV', () => {
+  it('harus dekripsi no_hp, alamat, dan media_sosial jika ada IV', () => {
     const row = {
       id: 1, nama: 'Budi',
       no_hp: 'encrypted_hp', no_hp_iv: 'iv1',
       alamat: 'encrypted_addr', alamat_iv: 'iv2',
+      media_sosial: 'encrypted_medsos', media_sosial_iv: 'iv3',
     };
     const result = dekripsiBarisJemaat(row);
     expect(result.no_hp).toBe('decrypted:encrypted_hp');
     expect(result.alamat).toBe('decrypted:encrypted_addr');
+    expect(result.media_sosial).toBe(JSON.stringify({ instagram: 'decrypted:encrypted_medsos' }));
     expect(result.no_hp_iv).toBeUndefined();
     expect(result.alamat_iv).toBeUndefined();
+    expect(result.media_sosial_iv).toBeUndefined();
   });
 
   it('harus return [DECRYPT_ERROR] jika dekripsi gagal', () => {
     decrypt.mockImplementation(() => { throw new Error('Bad decrypt'); });
-    const row = { id: 1, nama: 'Budi', no_hp: 'enc', no_hp_iv: 'iv', alamat: 'enc', alamat_iv: 'iv' };
+    decryptJson.mockImplementation(() => { throw new Error('Bad decrypt'); });
+    const row = {
+      id: 1, nama: 'Budi',
+      no_hp: 'enc', no_hp_iv: 'iv', alamat: 'enc', alamat_iv: 'iv',
+      media_sosial: 'enc', media_sosial_iv: 'iv',
+    };
     const result = dekripsiBarisJemaat(row);
     expect(result.no_hp).toBe('[DECRYPT_ERROR]');
     expect(result.alamat).toBe('[DECRYPT_ERROR]');
+    expect(result.media_sosial).toBe('[DECRYPT_ERROR]');
   });
 });
 
@@ -224,23 +234,35 @@ describe('report.service — generateJemaatReport format ekspor (Unit Test)', ()
     expect(result).toHaveProperty('token');
   });
 
-  it('data sensitif di file xlsx harus plaintext hasil dekripsi, bukan ciphertext', async () => {
+  it('data sensitif (no_hp, alamat, media_sosial) SELALU disertakan sebagai plaintext hasil dekripsi, bukan ciphertext', async () => {
     reportRepository.countJemaat.mockResolvedValue(1);
     reportRepository.getJemaatReport.mockResolvedValue([
-      { id: 1, nama: 'Budi', no_hp: 'ciphertext_hp', no_hp_iv: 'iv1', alamat: 'ciphertext_addr', alamat_iv: 'iv2' },
+      {
+        id: 1, nama: 'Budi',
+        no_hp: 'ciphertext_hp', no_hp_iv: 'iv1',
+        alamat: 'ciphertext_addr', alamat_iv: 'iv2',
+        media_sosial: 'ciphertext_medsos', media_sosial_iv: 'iv3',
+      },
     ]);
 
-    const result = await generateJemaatReport({ includeSensitive: true, format: 'xlsx' }, { actorUserId: 1 });
+    const result = await generateJemaatReport({ format: 'xlsx' }, { actorUserId: 1 });
     cleanupFiles.push(result.filePath);
 
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(result.filePath);
     const worksheet = workbook.worksheets[0];
-    const values = worksheet.getRow(2).values.filter((v) => v !== undefined && v !== null);
 
+    const headers = worksheet.getRow(1).values.filter((v) => v !== undefined && v !== null);
+    expect(headers).toContain('No HP');
+    expect(headers).toContain('Alamat');
+    expect(headers).toContain('Media Sosial');
+
+    const values = worksheet.getRow(2).values.filter((v) => v !== undefined && v !== null);
     expect(values).toContain('decrypted:ciphertext_hp');
     expect(values).toContain('decrypted:ciphertext_addr');
+    expect(values).toContain(JSON.stringify({ instagram: 'decrypted:ciphertext_medsos' }));
     expect(values).not.toContain('ciphertext_hp');
+    expect(values).not.toContain('ciphertext_medsos');
   });
 
   it('mencatat audit log EXPORT/LAPORAN', async () => {

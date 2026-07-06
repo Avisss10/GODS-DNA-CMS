@@ -5,8 +5,8 @@ const { decryptOptional } = require('../../utils/encryption.util');
  * Ambil semua jemaat aktif beserta skor untuk laporan.
  * Field identitas (nama, tgl_lahir, jenis_kelamin) tersimpan sebagai
  * ciphertext (migration 005) dan didekripsi otomatis di sini.
- * Data sensitif on-demand (no_hp, alamat) tetap dikembalikan dalam
- * bentuk ciphertext — dekripsi dilakukan di service (streaming).
+ * Data sensitif (no_hp, alamat, media_sosial) tetap dikembalikan
+ * dalam bentuk ciphertext — dekripsi dilakukan di service (streaming).
  *
  * Catatan: ORDER BY id (bukan nama) karena kolom nama kini ciphertext
  * — urutan alfabetis SQL tidak bermakna lagi, sementara sorting di
@@ -19,7 +19,7 @@ async function getJemaatReport({ limit = 500, offset = 0 } = {}) {
   const [rows] = await pool.query(
     `SELECT id, nama, nama_iv, tgl_lahir, tgl_lahir_iv,
             jenis_kelamin, jenis_kelamin_iv,
-            no_hp, no_hp_iv, alamat, alamat_iv,
+            no_hp, no_hp_iv, alamat, alamat_iv, media_sosial, media_sosial_iv,
             tgl_bergabung, is_active, is_new_member,
             skor_keaktifan, status_keaktifan, created_at
      FROM jemaat

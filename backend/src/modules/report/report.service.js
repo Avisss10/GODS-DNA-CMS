@@ -6,7 +6,7 @@ const PDFDocument = require('pdfkit');
 const reportRepository = require('./report.repository');
 const { recordAuditLog } = require('../auditlog/auditlog.repository');
 const { notifyLeaders } = require('../notification/notification.stub');
-const { decrypt } = require('../../utils/encryption.util');
+const { decrypt, decryptJson } = require('../../utils/encryption.util');
 const { getRedisClient } = require('../../config/redis');
 
 const SYNC_THRESHOLD = 500; // record < 500 → sinkron
@@ -118,9 +118,19 @@ function dekripsiBarisJemaat(row) {
   } catch {
     result.alamat = '[DECRYPT_ERROR]';
   }
+  try {
+    if (row.media_sosial && row.media_sosial_iv) {
+      // decryptJson mengembalikan object — di-stringify agar bisa
+      // ditulis sebagai satu sel teks di xlsx/pdf.
+      result.media_sosial = JSON.stringify(decryptJson(row.media_sosial, row.media_sosial_iv));
+    }
+  } catch {
+    result.media_sosial = '[DECRYPT_ERROR]';
+  }
   // Hapus IV dari output
   delete result.no_hp_iv;
   delete result.alamat_iv;
+  delete result.media_sosial_iv;
   return result;
 }
 
@@ -272,7 +282,7 @@ async function finalizeReport({ total, columns, rows, format, jenis, filters, ac
   return { async: false, ...file };
 }
 
-const JEMAAT_COLUMNS_BASE = [
+const JEMAAT_COLUMNS = [
   { header: 'ID', key: 'id' },
   { header: 'Nama', key: 'nama' },
   { header: 'Tanggal Lahir', key: 'tgl_lahir' },
@@ -282,39 +292,30 @@ const JEMAAT_COLUMNS_BASE = [
   { header: 'Jemaat Baru', key: 'is_new_member' },
   { header: 'Skor Keaktifan', key: 'skor_keaktifan' },
   { header: 'Status Keaktifan', key: 'status_keaktifan' },
-];
-const JEMAAT_COLUMNS_SENSITIVE = [
   { header: 'No HP', key: 'no_hp' },
   { header: 'Alamat', key: 'alamat' },
+  { header: 'Media Sosial', key: 'media_sosial' },
 ];
 
 /**
- * Generate laporan data jemaat.
- * Jika record < 500: sinkron, file langsung dikirim.
+ * Generate laporan data jemaat — SELALU menyertakan semua field,
+ * dengan no_hp, alamat, dan media_sosial didekripsi (tidak ada mode
+ * lain). Jika record < 500: sinkron, file langsung dikirim.
  * Jika record >= 500: async (simulasi queue), return token file.
  *
- * @param {{ includeSensitive?: boolean, format?: 'xlsx'|'pdf' }} options
+ * @param {{ format?: 'xlsx'|'pdf' }} options
  * @param {{ actorUserId: number }} auth
  */
-async function generateJemaatReport({ includeSensitive = false, format } = {}, { actorUserId = null } = {}) {
+async function generateJemaatReport({ format } = {}, { actorUserId = null } = {}) {
   const validFormat = validateFormat(format);
   const total = await reportRepository.countJemaat();
   const rawRows = await reportRepository.getJemaatReport({ limit: total });
 
-  const rows = includeSensitive
-    ? rawRows.map(dekripsiBarisJemaat)
-    : rawRows.map((r) => {
-        const { no_hp, no_hp_iv, alamat, alamat_iv, ...rest } = r;
-        return rest;
-      });
-
-  const columns = includeSensitive
-    ? [...JEMAAT_COLUMNS_BASE, ...JEMAAT_COLUMNS_SENSITIVE]
-    : JEMAAT_COLUMNS_BASE;
+  const rows = rawRows.map(dekripsiBarisJemaat);
 
   return finalizeReport({
-    total, columns, rows, format: validFormat,
-    jenis: 'JEMAAT', filters: { includeSensitive }, actorUserId,
+    total, columns: JEMAAT_COLUMNS, rows, format: validFormat,
+    jenis: 'JEMAAT', filters: {}, actorUserId,
   });
 }
 

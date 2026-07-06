@@ -1,5 +1,6 @@
 require('dotenv').config();
 const request = require('supertest');
+const ExcelJS = require('exceljs');
 const { startServer } = require('../../../src/server');
 const { getPool, closePool } = require('../../../src/config/database');
 const { closeRedis, getRedisClient } = require('../../../src/config/redis');
@@ -74,6 +75,16 @@ describeIfReady('Report Endpoints — REST HTTP Test (server aktif)', () => {
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toContain('spreadsheetml');
       expect(res.headers['content-disposition']).toMatch(/\.xlsx"/);
+
+      // Report jemaat SELALU menyertakan kolom sensitif terdekripsi
+      // (tidak ada lagi mode ?sensitive)
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(res.body);
+      const headers = workbook.worksheets[0].getRow(1).values
+        .filter((v) => v !== undefined && v !== null);
+      expect(headers).toContain('No HP');
+      expect(headers).toContain('Alamat');
+      expect(headers).toContain('Media Sosial');
     });
 
     it('200 dan mengirim file .pdf saat format=pdf', async () => {
