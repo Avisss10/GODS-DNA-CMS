@@ -7,6 +7,9 @@ import PlaceholderPage from '@/routes/PlaceholderPage';
 import ProtectedRoute from '@/routes/ProtectedRoute';
 import JemaatDetailPage from '@/features/jemaat/JemaatDetailPage';
 import JemaatListPage from '@/features/jemaat/JemaatListPage';
+import CellGroupListPage from '@/features/cellgroup/CellGroupListPage';
+import CellGroupDetailPage from '@/features/cellgroup/CellGroupDetailPage';
+import MeetingDetailPage from '@/features/cellgroup/MeetingDetailPage';
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/dashboard" replace /> },
@@ -20,7 +23,13 @@ export const router = createBrowserRouter([
           { path: '/dashboard', element: <DashboardPage />, handle: { title: 'Dashboard' } },
           { path: '/jemaat', element: <JemaatListPage />, handle: { title: 'Jemaat' } },
           { path: '/jemaat/:id', element: <JemaatDetailPage />, handle: { title: 'Detail Jemaat' } },
-          { path: '/cellgroup', element: <PlaceholderPage title="Cell Group" />, handle: { title: 'Cell Group' } },
+          { path: '/cellgroup', element: <CellGroupListPage />, handle: { title: 'Cell Group' } },
+          { path: '/cellgroup/:id', element: <CellGroupDetailPage />, handle: { title: 'Detail Cell Group' } },
+          {
+            path: '/cellgroup/meetings/:meetingId',
+            element: <MeetingDetailPage />,
+            handle: { title: 'Detail Meeting' },
+          },
           { path: '/event', element: <PlaceholderPage title="Event" />, handle: { title: 'Event' } },
           { path: '/volunteer', element: <PlaceholderPage title="Volunteer" />, handle: { title: 'Volunteer' } },
           { path: '/report', element: <PlaceholderPage title="Report" />, handle: { title: 'Report' } },
