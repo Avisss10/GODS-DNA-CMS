@@ -5,6 +5,8 @@ import DashboardPage from '@/routes/DashboardPage';
 import NotFoundPage from '@/routes/NotFoundPage';
 import PlaceholderPage from '@/routes/PlaceholderPage';
 import ProtectedRoute from '@/routes/ProtectedRoute';
+import JemaatDetailPage from '@/features/jemaat/JemaatDetailPage';
+import JemaatListPage from '@/features/jemaat/JemaatListPage';
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/dashboard" replace /> },
@@ -16,7 +18,8 @@ export const router = createBrowserRouter([
         element: <AppLayout />,
         children: [
           { path: '/dashboard', element: <DashboardPage />, handle: { title: 'Dashboard' } },
-          { path: '/jemaat', element: <PlaceholderPage title="Jemaat" />, handle: { title: 'Jemaat' } },
+          { path: '/jemaat', element: <JemaatListPage />, handle: { title: 'Jemaat' } },
+          { path: '/jemaat/:id', element: <JemaatDetailPage />, handle: { title: 'Detail Jemaat' } },
           { path: '/cellgroup', element: <PlaceholderPage title="Cell Group" />, handle: { title: 'Cell Group' } },
           { path: '/event', element: <PlaceholderPage title="Event" />, handle: { title: 'Event' } },
           { path: '/volunteer', element: <PlaceholderPage title="Volunteer" />, handle: { title: 'Volunteer' } },

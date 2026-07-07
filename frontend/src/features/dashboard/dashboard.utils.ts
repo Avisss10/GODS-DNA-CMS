@@ -1,20 +1,6 @@
 import type { EventListItem } from '@/features/event/event.api';
 import type { JemaatListItem, StatusKeaktifan } from '@/features/jemaat/jemaat.api';
-
-export const STATUS_LABELS: Record<StatusKeaktifan, string> = {
-  AKTIF: 'Aktif',
-  KURANG_AKTIF: 'Kurang Aktif',
-  TIDAK_AKTIF: 'Tidak Aktif',
-  BELUM_CUKUP_DATA: 'Belum Cukup Data',
-};
-
-// Warna harus persis token status (lihat tailwind.config.js -> colors.status)
-export const STATUS_COLORS: Record<StatusKeaktifan, string> = {
-  AKTIF: '#16A34A',
-  KURANG_AKTIF: '#D97706',
-  TIDAK_AKTIF: '#DC2626',
-  BELUM_CUKUP_DATA: '#64748B',
-};
+export { STATUS_LABELS, STATUS_COLORS } from '@/features/jemaat/jemaat.constants';
 
 export function countByStatusKeaktifan(list: JemaatListItem[]): Record<StatusKeaktifan, number> {
   const counts: Record<StatusKeaktifan, number> = {
