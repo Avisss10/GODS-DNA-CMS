@@ -10,6 +10,7 @@ import JemaatListPage from '@/features/jemaat/JemaatListPage';
 import CellGroupListPage from '@/features/cellgroup/CellGroupListPage';
 import CellGroupDetailPage from '@/features/cellgroup/CellGroupDetailPage';
 import MeetingDetailPage from '@/features/cellgroup/MeetingDetailPage';
+import VolunteerTypeListPage from '@/features/volunteer/VolunteerTypeListPage';
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/dashboard" replace /> },
@@ -31,7 +32,7 @@ export const router = createBrowserRouter([
             handle: { title: 'Detail Meeting' },
           },
           { path: '/event', element: <PlaceholderPage title="Event" />, handle: { title: 'Event' } },
-          { path: '/volunteer', element: <PlaceholderPage title="Volunteer" />, handle: { title: 'Volunteer' } },
+          { path: '/volunteer', element: <VolunteerTypeListPage />, handle: { title: 'Volunteer' } },
           { path: '/report', element: <PlaceholderPage title="Report" />, handle: { title: 'Report' } },
           {
             element: <ProtectedRoute allowedRoles={['LEADER']} />,

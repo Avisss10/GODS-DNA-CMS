@@ -14,6 +14,7 @@ import StatusKeaktifanBadge from './components/StatusKeaktifanBadge';
 import JemaatFormModal from './components/JemaatFormModal';
 import DeleteJemaatDialog from './components/DeleteJemaatDialog';
 import JemaatTimeline, { type TimelineEntry } from './components/JemaatTimeline';
+import JemaatVolunteerSection from './components/JemaatVolunteerSection';
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -227,6 +228,14 @@ export default function JemaatDetailPage() {
           </CardContent>
         </Card>
       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Volunteer</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <JemaatVolunteerSection jemaatId={id} />
+        </CardContent>
+      </Card>
 
       <JemaatFormModal open={editOpen} onOpenChange={setEditOpen} mode="edit" jemaat={jemaat} onSuccess={refreshDetail} />
 
