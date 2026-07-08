@@ -89,44 +89,78 @@ export default function AuditLogPage() {
       )}
 
       {!isLoading && items.length > 0 && (
-        <div className="overflow-x-auto rounded-card border border-slate-200">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-3 font-medium">ID</th>
-                <th className="px-4 py-3 font-medium">Modul</th>
-                <th className="px-4 py-3 font-medium">Aksi</th>
-                <th className="px-4 py-3 font-medium">Object ID</th>
-                <th className="px-4 py-3 font-medium">User ID</th>
-                <th className="px-4 py-3 font-medium">Waktu</th>
-                <th className="px-4 py-3 font-medium text-center">Integritas</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {items.map((row) => (
-                <tr
-                  key={row.id}
-                  onClick={() => setSelectedItem(row)}
-                  className="cursor-pointer transition-colors hover:bg-slate-50"
-                >
-                  <td className="px-4 py-3 text-slate-500">{row.id}</td>
-                  <td className="px-4 py-3 font-medium text-slate-800">{row.modul}</td>
-                  <td className="px-4 py-3 text-slate-600">{row.aksi}</td>
-                  <td className="px-4 py-3 text-slate-600">{row.object_id ?? '-'}</td>
-                  <td className="px-4 py-3 text-slate-600">{row.user_id ?? '-'}</td>
-                  <td className="px-4 py-3 text-slate-500">{new Date(row.created_at).toLocaleString('id-ID')}</td>
-                  <td className="px-4 py-3 text-center">
-                    {row.hmac_status !== 'OK' && (
-                      <span title={`hmac_status: ${row.hmac_status}`}>
-                        <AlertTriangle className="mx-auto h-4 w-4 text-red-600" />
-                      </span>
-                    )}
-                  </td>
+        <>
+          {/* Desktop/tablet */}
+          <div className="hidden overflow-x-auto rounded-card border border-slate-200 sm:block">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3 font-medium">ID</th>
+                  <th className="px-4 py-3 font-medium">Modul</th>
+                  <th className="px-4 py-3 font-medium">Aksi</th>
+                  <th className="px-4 py-3 font-medium">Object ID</th>
+                  <th className="px-4 py-3 font-medium">User ID</th>
+                  <th className="px-4 py-3 font-medium">Waktu</th>
+                  <th className="px-4 py-3 font-medium text-center">Integritas</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {items.map((row) => (
+                  <tr
+                    key={row.id}
+                    onClick={() => setSelectedItem(row)}
+                    className="cursor-pointer transition-colors hover:bg-slate-50"
+                  >
+                    <td className="px-4 py-3 text-slate-500">{row.id}</td>
+                    <td className="px-4 py-3 font-medium text-slate-800">{row.modul}</td>
+                    <td className="px-4 py-3 text-slate-600">{row.aksi}</td>
+                    <td className="px-4 py-3 text-slate-600">{row.object_id ?? '-'}</td>
+                    <td className="px-4 py-3 text-slate-600">{row.user_id ?? '-'}</td>
+                    <td className="px-4 py-3 text-slate-500">{new Date(row.created_at).toLocaleString('id-ID')}</td>
+                    <td className="px-4 py-3 text-center">
+                      {row.hmac_status !== 'OK' && (
+                        <span title={`hmac_status: ${row.hmac_status}`}>
+                          <AlertTriangle className="mx-auto h-4 w-4 text-red-600" />
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile: card-list, tetap bisa diklik untuk buka diff modal */}
+          <div className="space-y-2 sm:hidden">
+            {items.map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                onClick={() => setSelectedItem(row)}
+                className="flex w-full items-start justify-between gap-3 rounded-card border border-slate-200 bg-card p-3 text-left transition-colors hover:bg-slate-50"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">#{row.id}</span>
+                    <span className="font-medium text-slate-800">{row.modul}</span>
+                    <span className="text-slate-500">— {row.aksi}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Object: {row.object_id ?? '-'} · User: {row.user_id ?? '-'}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    {new Date(row.created_at).toLocaleString('id-ID')}
+                  </p>
+                </div>
+                {row.hmac_status !== 'OK' && (
+                  <span title={`hmac_status: ${row.hmac_status}`} className="shrink-0">
+                    <AlertTriangle className="h-4 w-4 text-red-600" />
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
       <AuditLogDiffModal item={selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)} />

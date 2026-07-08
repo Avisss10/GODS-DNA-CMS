@@ -65,7 +65,7 @@ export default function VolunteerNeedsSection({ eventId, eventStatus }: Voluntee
               <li key={n.id} className="px-4 py-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium text-slate-800">{n.nama_jenis}</span>
-                  <span className={isFull ? 'font-medium text-status-aktif' : 'text-slate-500'}>
+                  <span className={isFull ? 'font-medium text-status-aktifText' : 'text-slate-500'}>
                     Terisi {n.jumlah_terisi} dari {n.kuota}
                   </span>
                 </div>

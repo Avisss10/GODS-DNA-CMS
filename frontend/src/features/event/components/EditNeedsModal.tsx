@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -37,7 +37,7 @@ export default function EditNeedsModal({ open, eventId, currentNeeds, onOpenChan
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Jenis volunteer nonaktif tidak boleh muncul sbg opsi kebutuhan BARU
-  // (instruksi Tahap 6) — tapi kalau event ini sudah punya kuota utk jenis
+  // (instruksi Tahap 6) â€” tapi kalau event ini sudah punya kuota utk jenis
   // yg sekarang nonaktif, tetap ditampilkan (read-only info) supaya tidak
   // hilang begitu saja dari daftar.
   const typesQuery = useQuery({
@@ -62,7 +62,7 @@ export default function EditNeedsModal({ open, eventId, currentNeeds, onOpenChan
       };
     });
 
-    // Kebutuhan lama yang jenisnya sudah nonaktif — tampilkan tapi kunci
+    // Kebutuhan lama yang jenisnya sudah nonaktif â€” tampilkan tapi kunci
     // (tidak bisa dicentang ulang kalau sempat dilepas).
     const orphanRows: RowState[] = currentNeeds
       .filter((n) => !activeTypes.some((t) => t.id === n.volunteer_type_id))

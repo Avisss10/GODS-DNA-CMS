@@ -17,14 +17,27 @@ export default {
           volunteer: '#9333EA',
           report: '#DB2777',
           auditlog: '#64748B',
+          // Varian teks — dipakai KHUSUS untuk text-modul-*Text, bukan bg/ikon.
+          // Semua sudah dihitung >= 4.5:1 vs background card (#F1F4F8).
+          jemaatText: '#1D4ED8',
+          cellgroupText: '#0F766E',
+          eventText: '#C2410C',
+          volunteerText: '#7E22CE',
+          reportText: '#BE185D',
+          auditlogText: '#475569',
         },
         status: {
           aktif: '#16A34A',
           kurangAktif: '#D97706',
           tidakAktif: '#DC2626',
           belumData: '#64748B',
+          // idem — varian teks kontras tinggi
+          aktifText: '#15803D',
+          kurangAktifText: '#B45309',
+          tidakAktifText: '#B91C1C',
+          belumDataText: '#475569',
         },
-        // shadcn/ui (CSS variables) — digabung dengan token accent & card
+          // shadcn/ui (CSS variables) — digabung dengan token accent & card
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',

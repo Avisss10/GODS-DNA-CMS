@@ -16,7 +16,7 @@ export function getEventStatusVariant(status: EventStatus): EventStatusVariant {
     case 'PUBLISHED':
       return { label: 'Published', className: 'border-transparent bg-blue-100 text-blue-700' };
     case 'AKTIF':
-      return { label: 'Aktif', className: 'border-transparent bg-status-aktif/15 text-status-aktif' };
+    return { label: 'Aktif', className: 'border-transparent bg-status-aktif/15 text-status-aktifText' };
     case 'SELESAI':
       return { label: 'Selesai', className: 'border-transparent bg-slate-200 text-slate-600' };
     case 'DIARSIPKAN':

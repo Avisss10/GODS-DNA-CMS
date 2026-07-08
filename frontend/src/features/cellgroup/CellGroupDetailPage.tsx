@@ -1,8 +1,8 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { isAxiosError } from 'axios';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { ArrowLeft, Pencil, PowerOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -44,7 +44,7 @@ export default function CellGroupDetailPage() {
   const cg = cgQuery.data;
 
   // GET /cell-groups/:id TIDAK punya nama_leader/jumlah_anggota (lihat
-  // catatan di cellgroup.types.ts) — ambil terpisah dari jemaat & members.
+  // catatan di cellgroup.types.ts) â€” ambil terpisah dari jemaat & members.
   const leaderQuery = useQuery({
     queryKey: ['jemaat', 'basic', cg?.leader_id],
     queryFn: () => getJemaatById(cg!.leader_id as number),
@@ -73,7 +73,7 @@ export default function CellGroupDetailPage() {
       setDeactivateOpen(false);
       navigate('/cellgroup');
 
-      // CG langsung 404 di GET /:id setelah nonaktif — satu-satunya jalan
+      // CG langsung 404 di GET /:id setelah nonaktif â€” satu-satunya jalan
       // reaktivasi adalah lewat toast aksi undo ini (keputusan yang sudah
       // disepakati di prompt), toast tidak auto-hilang cepat.
       toast('Cell Group dinonaktifkan', {
@@ -201,7 +201,7 @@ export default function CellGroupDetailPage() {
         <div className="flex border-b border-slate-100">
           <button
             className={`px-4 py-3 text-sm font-medium ${
-              tab === 'anggota' ? 'border-b-2 border-modul-cellgroup text-modul-cellgroup' : 'text-slate-500'
+              tab === 'anggota' ? 'border-b-2 border-modul-cellgroup text-modul-cellgroupText' : 'text-slate-500'
             }`}
             onClick={() => setTab('anggota')}
           >
@@ -209,7 +209,7 @@ export default function CellGroupDetailPage() {
           </button>
           <button
             className={`px-4 py-3 text-sm font-medium ${
-              tab === 'meeting' ? 'border-b-2 border-modul-cellgroup text-modul-cellgroup' : 'text-slate-500'
+              tab === 'meeting' ? 'border-b-2 border-modul-cellgroup text-modul-cellgroupText' : 'text-slate-500'
             }`}
             onClick={() => setTab('meeting')}
           >

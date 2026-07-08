@@ -1,7 +1,8 @@
+﻿import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { KeyRound, Plus, UserCog } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -91,46 +92,90 @@ export default function UserManagementPage() {
       )}
 
       {!isLoading && !isError && (
-        <div className="overflow-x-auto rounded-card border border-slate-200">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-3 font-medium">Username</th>
-                <th className="px-4 py-3 font-medium">Role</th>
-                <th className="px-4 py-3 font-medium">Status Aktif</th>
-                <th className="px-4 py-3 font-medium">Last Login</th>
-                <th className="px-4 py-3 font-medium text-right">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {items.map((u) => (
-                <tr key={u.id} className={!u.aktif ? 'opacity-60' : undefined}>
-                  <td className="px-4 py-3 font-medium text-slate-800">{u.username}</td>
-                  <td className="px-4 py-3">
-                    {/* Role read-only: badge saja — tidak ada endpoint update peran. */}
-                    <Badge variant="secondary">{u.peran}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <StatusToggleSwitch checked={u.aktif} onClick={() => setToggleTarget(u)} />
-                      <Badge variant={u.aktif ? 'default' : 'secondary'}>{u.aktif ? 'Aktif' : 'Nonaktif'}</Badge>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{formatLastLogin(u.last_login_at)}</td>
-                  <td className="px-4 py-3 text-right">
-                    {/* Sembunyi total utk baris LEADER — backend selalu 403. */}
-                    {u.peran === 'ADMIN' && (
-                      <Button variant="outline" size="sm" onClick={() => setResetTarget(u)}>
-                        <KeyRound className="h-3.5 w-3.5" />
-                        Reset Password
-                      </Button>
-                    )}
-                  </td>
+        <>
+          {/* Desktop/tablet */}
+          <div className="hidden overflow-x-auto rounded-card border border-slate-200 sm:block">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Username</th>
+                  <th className="px-4 py-3 font-medium">Role</th>
+                  <th className="px-4 py-3 font-medium">Status Aktif</th>
+                  <th className="px-4 py-3 font-medium">Last Login</th>
+                  <th className="px-4 py-3 font-medium text-right">Aksi</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {items.map((u) => (
+                  <tr key={u.id} className={!u.aktif ? 'opacity-60' : undefined}>
+                    <td className="px-4 py-3 font-medium text-slate-800">{u.username}</td>
+                    <td className="px-4 py-3">
+                      {/* Role read-only: badge saja — tidak ada endpoint update peran. */}
+                      <Badge variant="secondary">{u.peran}</Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <StatusToggleSwitch
+                          checked={u.aktif}
+                          label={`Ubah status akun ${u.username}`}
+                          onClick={() => setToggleTarget(u)}
+                        />
+                        <Badge variant={u.aktif ? 'default' : 'secondary'}>{u.aktif ? 'Aktif' : 'Nonaktif'}</Badge>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">{formatLastLogin(u.last_login_at)}</td>
+                    <td className="px-4 py-3 text-right">
+                      {/* Sembunyi total utk baris LEADER — backend selalu 403. */}
+                      {u.peran === 'ADMIN' && (
+                        <Button variant="outline" size="sm" onClick={() => setResetTarget(u)}>
+                          <KeyRound className="h-3.5 w-3.5" />
+                          Reset Password
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile: card-list */}
+          <div className="space-y-3 sm:hidden">
+            {items.map((u) => (
+              <div
+                key={u.id}
+                className={cn("rounded-card border border-slate-200 bg-card p-4 transition-opacity", !u.aktif && "opacity-60")}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-slate-800">{u.username}</p>
+                    <Badge variant="secondary" className="mt-1">{u.peran}</Badge>
+                  </div>
+                  <Badge variant={u.aktif ? 'default' : 'secondary'} className="shrink-0">
+                    {u.aktif ? 'Aktif' : 'Nonaktif'}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">Login terakhir: {formatLastLogin(u.last_login_at)}</p>
+                <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                  <div className="flex items-center gap-2">
+                    <StatusToggleSwitch
+                      checked={u.aktif}
+                      label={`Ubah status akun ${u.username}`}
+                      onClick={() => setToggleTarget(u)}
+                    />
+                    <span className="text-xs text-slate-500">Status</span>
+                  </div>
+                  {u.peran === 'ADMIN' && (
+                    <Button variant="outline" size="sm" onClick={() => setResetTarget(u)}>
+                      <KeyRound className="h-3.5 w-3.5" />
+                      Reset Password
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       <CreateUserModal open={createOpen} onOpenChange={setCreateOpen} onSuccess={invalidateList} />

@@ -8,6 +8,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme="light"
       className="toaster group"
+      // Fallback default kalau suatu saat ada pemanggilan toast() polos
+      // tanpa lewat wrapper src/lib/toast.ts.
+      duration={4000}
       toastOptions={{
         classNames: {
           toast:

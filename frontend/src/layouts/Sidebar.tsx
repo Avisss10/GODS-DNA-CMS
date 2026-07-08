@@ -82,6 +82,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onRequestLogout }: 
                   <NavLink
                     to={item.to}
                     onClick={onCloseMobile}
+                    aria-label={item.label}
                     className={({ isActive }) =>
                       cn(
                         'flex items-center gap-3 rounded-card px-2.5 py-2 text-sm font-medium transition-colors',
@@ -114,6 +115,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onRequestLogout }: 
           <hr className="mb-2 border-slate-400/40" />
           <button
             type="button"
+            aria-label="Keluar dari akun"
             onClick={() => {
               onCloseMobile();
               onRequestLogout();

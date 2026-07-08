@@ -1,6 +1,6 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { AlertCircle, AlertTriangle, Bell, CheckCheck, Info } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -42,7 +42,7 @@ export default function NotificationPage() {
   const [filterMode, setFilterMode] = useState<FilterMode>('unread');
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   // Item yang baru diklik: tetap dirender dulu tapi memudar (opacity)
-  // sebelum hilang dari daftar via refetch — supaya tidak "loncat" tiba-tiba.
+  // sebelum hilang dari daftar via refetch â€” supaya tidak "loncat" tiba-tiba.
   const [pendingReadIds, setPendingReadIds] = useState<Set<number>>(new Set());
 
   const isUnreadFilter = filterMode === 'unread';

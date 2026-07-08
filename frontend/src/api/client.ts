@@ -1,5 +1,5 @@
-import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
-import { toast } from 'sonner';
+﻿import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import { toast } from '@/lib/toast';
 import { router } from '@/routes';
 import { useAuthStore } from '@/store/auth.store';
 
@@ -65,7 +65,7 @@ api.interceptors.response.use(
       // Hanya tampilkan toast + redirect kalau user memang sedang dalam
       // sesi aktif (mis. heartbeat mendeteksi refresh token invalid).
       // Saat restore sesi awal (AppInit) gagal, status belum pernah
-      // 'authenticated' — user memang belum pernah login, jangan tampilkan
+      // 'authenticated' â€” user memang belum pernah login, jangan tampilkan
       // toast "sesi berakhir" yang menyesatkan.
       const wasAuthenticated = useAuthStore.getState().status === 'authenticated';
       useAuthStore.getState().clearUser();

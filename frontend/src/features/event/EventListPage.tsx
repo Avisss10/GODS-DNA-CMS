@@ -319,7 +319,7 @@ async function handleConfirmBulkArchive() {
                       <h3 className="font-semibold text-slate-800">{ev.judul}</h3>
                       <Badge className={variant.className}>{variant.label}</Badge>
                     </div>
-                    <p className="mt-1 text-xs font-medium uppercase tracking-wide text-modul-event">{ev.jenis}</p>
+                    <p className="mt-1 text-xs font-medium uppercase tracking-wide text-modul-eventText">{ev.jenis}</p>
                     <p className="mt-2 text-sm text-slate-500">{formatEventDate(ev.waktu_mulai)}</p>
                     {ev.deskripsi && <p className="mt-1 line-clamp-2 text-sm text-slate-500">{ev.deskripsi}</p>}
                   </Link>

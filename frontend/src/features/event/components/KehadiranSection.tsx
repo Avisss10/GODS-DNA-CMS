@@ -1,6 +1,6 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { ClipboardCheck, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -68,7 +68,7 @@ export default function KehadiranSection({ eventId, eventStatus }: KehadiranSect
     return (
       <div className="rounded-card border border-slate-200 p-4">
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2 text-status-aktif">
+          <div className="flex items-center gap-2 text-status-aktifText">
             <ClipboardCheck className="h-4 w-4" />
             <p className="text-sm font-medium">Kehadiran sudah diinput</p>
           </div>

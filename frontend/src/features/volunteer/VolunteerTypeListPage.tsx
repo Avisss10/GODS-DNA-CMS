@@ -1,7 +1,7 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { HandHeart, Pencil, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -133,51 +133,94 @@ export default function VolunteerTypeListPage() {
       )}
 
       {!isLoading && !isEmpty && (
-        <div className="overflow-x-auto rounded-card border border-slate-200">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-3 font-medium">Nama</th>
-                <th className="px-4 py-3 font-medium">Deskripsi</th>
-                <th className="px-4 py-3 font-medium">Jumlah Anggota</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium text-right">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {data!.map((item) => (
-                <tr
-                  key={item.id}
-                  className={cn('transition-opacity', !item.is_active && 'opacity-60')}
-                >
-                  <td className="px-4 py-3 font-medium text-slate-800">{item.nama}</td>
-                  <td className="max-w-xs px-4 py-3 text-slate-600">
-                    <span className="line-clamp-2">{item.deskripsi || '-'}</span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{item.jumlah_anggota}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <StatusToggleSwitch
-                        checked={item.is_active}
-                        disabled={isTogglingId === item.id}
-                        onClick={() => handleToggleClick(item)}
-                      />
-                      <Badge variant={item.is_active ? 'default' : 'secondary'}>
-                        {item.is_active ? 'Aktif' : 'Nonaktif'}
-                      </Badge>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                      Edit
-                    </Button>
-                  </td>
+        <>
+          {/* Desktop/tablet: tabel biasa, disembunyikan di mobile */}
+          <div className="hidden overflow-x-auto rounded-card border border-slate-200 sm:block">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Nama</th>
+                  <th className="px-4 py-3 font-medium">Deskripsi</th>
+                  <th className="px-4 py-3 font-medium">Jumlah Anggota</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium text-right">Aksi</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {data!.map((item) => (
+                  <tr
+                    key={item.id}
+                    className={cn('transition-opacity', !item.is_active && 'opacity-60')}
+                  >
+                    <td className="px-4 py-3 font-medium text-slate-800">{item.nama}</td>
+                    <td className="max-w-xs px-4 py-3 text-slate-600">
+                      <span className="line-clamp-2">{item.deskripsi || '-'}</span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">{item.jumlah_anggota}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <StatusToggleSwitch
+                          checked={item.is_active}
+                          disabled={isTogglingId === item.id}
+                          label={`Ubah status jenis volunteer ${item.nama}`}
+                          onClick={() => handleToggleClick(item)}
+                        />
+                        <Badge variant={item.is_active ? 'default' : 'secondary'}>
+                          {item.is_active ? 'Aktif' : 'Nonaktif'}
+                        </Badge>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile: card-list, disembunyikan di tablet ke atas */}
+          <div className="space-y-3 sm:hidden">
+            {data!.map((item) => (
+              <div
+                key={item.id}
+                className={cn(
+                  'rounded-card border border-slate-200 bg-card p-4 transition-opacity',
+                  !item.is_active && 'opacity-60',
+                )}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-medium text-slate-800">{item.nama}</p>
+                  <Badge variant={item.is_active ? 'default' : 'secondary'} className="shrink-0">
+                    {item.is_active ? 'Aktif' : 'Nonaktif'}
+                  </Badge>
+                </div>
+                {item.deskripsi && (
+                  <p className="mt-1 line-clamp-2 text-sm text-slate-600">{item.deskripsi}</p>
+                )}
+                <p className="mt-2 text-xs text-slate-500">{item.jumlah_anggota} anggota</p>
+                <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                  <div className="flex items-center gap-2">
+                    <StatusToggleSwitch
+                      checked={item.is_active}
+                      disabled={isTogglingId === item.id}
+                      label={`Ubah status jenis volunteer ${item.nama}`}
+                      onClick={() => handleToggleClick(item)}
+                    />
+                    <span className="text-xs text-slate-500">Status</span>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       <VolunteerTypeFormModal

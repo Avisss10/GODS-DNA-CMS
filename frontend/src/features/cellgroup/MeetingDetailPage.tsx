@@ -1,7 +1,7 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+﻿import { useRef, useState, type ChangeEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { ArrowLeft, CalendarClock, ClipboardList, ImagePlus, Loader2, Pencil, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -164,7 +164,7 @@ export default function MeetingDetailPage() {
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Badge variant="outline">{meeting.jenis}</Badge>
               <span className="flex items-center gap-1 text-xs text-slate-500">
-                <CalendarClock className="h-3.5 w-3.5" /> {formatDateTime(meeting.waktu_mulai)} —{' '}
+                <CalendarClock className="h-3.5 w-3.5" /> {formatDateTime(meeting.waktu_mulai)} â€”{' '}
                 {formatDateTime(meeting.waktu_selesai)}
               </span>
             </div>

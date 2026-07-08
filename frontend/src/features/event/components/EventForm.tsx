@@ -1,8 +1,8 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,7 +33,7 @@ const schema = z
 
 type FormValues = z.infer<typeof schema>;
 
-// Jenis event bebas teks di backend — beberapa contoh umum sbg saran cepat.
+// Jenis event bebas teks di backend â€” beberapa contoh umum sbg saran cepat.
 const JENIS_SUGGESTIONS = ['Ibadah Raya', 'Doa Bersama', 'Retreat', 'Pelatihan', 'Bakti Sosial', 'Perayaan'];
 
 interface EventFormProps {

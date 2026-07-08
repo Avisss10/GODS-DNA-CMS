@@ -1,6 +1,6 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { AlertTriangle, CheckCircle2, Download, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { downloadReport, extractErrorMessage } from '../report.api';
 import type { ReportStage } from '../report.hooks';
@@ -27,7 +27,7 @@ export default function ReportGenerateStatus({ stage, asyncToken, asyncMessage }
       setDownloaded(true);
       toast.success('Laporan berhasil diunduh');
     } catch (err) {
-      // 404: token tidak valid/sudah dipakai/kadaluarsa — tangani dengan
+      // 404: token tidak valid/sudah dipakai/kadaluarsa â€” tangani dengan
       // pesan jelas, jangan crash.
       const message = await extractErrorMessage(
         err,
@@ -49,7 +49,7 @@ export default function ReportGenerateStatus({ stage, asyncToken, asyncMessage }
       )}
 
       {stage === 'done-sync' && (
-        <div className="flex items-center gap-2 font-medium text-status-aktif">
+        <div className="flex items-center gap-2 font-medium text-status-aktifText">
           <CheckCircle2 className="h-4 w-4" />
           Diunduh
         </div>
@@ -58,7 +58,7 @@ export default function ReportGenerateStatus({ stage, asyncToken, asyncMessage }
       {stage === 'done-async' && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 font-medium text-slate-700">
-            <CheckCircle2 className="h-4 w-4 text-status-aktif" />
+            <CheckCircle2 className="h-4 w-4 text-status-aktifText" />
             Siap diunduh
           </div>
 
@@ -66,7 +66,7 @@ export default function ReportGenerateStatus({ stage, asyncToken, asyncMessage }
             <div className="flex items-start gap-2 rounded-card border border-amber-300 bg-amber-50 p-2.5 text-amber-800">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <p className="font-medium">
-                Unduh sekarang — link ini akan kedaluwarsa dalam 15 menit dan hanya bisa diunduh sekali.
+                Unduh sekarang â€” link ini akan kedaluwarsa dalam 15 menit dan hanya bisa diunduh sekali.
               </p>
             </div>
           )}
@@ -81,7 +81,7 @@ export default function ReportGenerateStatus({ stage, asyncToken, asyncMessage }
           )}
 
           {downloaded && (
-            <p className="flex items-center gap-2 font-medium text-status-aktif">
+            <p className="flex items-center gap-2 font-medium text-status-aktifText">
               <CheckCircle2 className="h-4 w-4" />
               File sudah diunduh.
             </p>

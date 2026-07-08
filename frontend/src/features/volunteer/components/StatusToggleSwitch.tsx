@@ -3,15 +3,17 @@ import { cn } from '@/lib/utils';
 interface StatusToggleSwitchProps {
   checked: boolean;
   disabled?: boolean;
+  label: string;
   onClick: () => void;
 }
 
-export default function StatusToggleSwitch({ checked, disabled, onClick }: StatusToggleSwitchProps) {
+export default function StatusToggleSwitch({ checked, disabled, label, onClick }: StatusToggleSwitchProps) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-label={label}
       disabled={disabled}
       onClick={onClick}
       className={cn(

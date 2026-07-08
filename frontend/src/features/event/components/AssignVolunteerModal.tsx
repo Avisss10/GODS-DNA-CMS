@@ -1,7 +1,7 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { Sparkles, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -181,7 +181,7 @@ export default function AssignVolunteerModal({
                     <div>
                       <p className="font-medium text-slate-800">{c.nama}</p>
                       <p className="text-xs text-slate-500">
-                        Skor {(c.composite_score * 100).toFixed(0)} · {c.jumlah_tugas_30_hari}x tugas / 30 hari
+                        Skor {(c.composite_score * 100).toFixed(0)} Â· {c.jumlah_tugas_30_hari}x tugas / 30 hari
                       </p>
                     </div>
                     <Button size="sm" variant={selectedJemaatId === c.jemaat_id ? 'default' : 'outline'} onClick={() => setSelectedJemaatId(c.jemaat_id)}>

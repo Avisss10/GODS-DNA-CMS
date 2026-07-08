@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { isAxiosError } from 'axios';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { ArrowLeft, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,7 +42,7 @@ export default function JemaatDetailPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   // staleTime 30s: tiap fetch /full memicu 1 baris audit log
-  // VIEW_SENSITIVE — hindari refetch berlebihan tiap remount singkat.
+  // VIEW_SENSITIVE â€” hindari refetch berlebihan tiap remount singkat.
   const fullQuery = useQuery({
     queryKey: ['jemaat', 'full', id],
     queryFn: () => getJemaatFull(id),

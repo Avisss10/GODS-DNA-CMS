@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+﻿import { useEffect, useState } from 'react';
+import { toast } from '@/lib/toast';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,7 +21,7 @@ interface AbsensiDialogProps {
 }
 
 // Tidak ada endpoint baca ulang absensi tersimpan (kontrak backend hanya
-// expose submit, bukan GET) — jadi tiap dialog dibuka, semua anggota
+// expose submit, bukan GET) â€” jadi tiap dialog dibuka, semua anggota
 // direset default "tidak hadir". Backend upsert (ON DUPLICATE KEY UPDATE)
 // sehingga form ini boleh dibuka berkali-kali untuk revisi.
 export default function AbsensiDialog({ open, meetingId, onOpenChange, onSuccess }: AbsensiDialogProps) {

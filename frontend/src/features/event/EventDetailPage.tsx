@@ -1,7 +1,7 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { ArrowLeft, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -103,12 +103,12 @@ export default function EventDetailPage() {
             <h1 className="text-xl font-bold text-slate-800">{event.judul}</h1>
             <div className="mt-1 flex items-center gap-2">
               <Badge className={variant.className}>{variant.label}</Badge>
-              <span className="text-xs font-medium uppercase tracking-wide text-modul-event">{event.jenis}</span>
+              <span className="text-xs font-medium uppercase tracking-wide text-modul-eventText">{event.jenis}</span>
             </div>
           </div>
         </div>
 
-        {/* Tombol Edit hanya render/aktif saat status DRAFT/PUBLISHED — instruksi Tahap 6 */}
+        {/* Tombol Edit hanya render/aktif saat status DRAFT/PUBLISHED â€” instruksi Tahap 6 */}
         <Button variant="outline" onClick={() => setEditOpen(true)} disabled={!canEdit}>
           <Pencil className="h-4 w-4" /> Edit
         </Button>
