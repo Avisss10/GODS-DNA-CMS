@@ -3,6 +3,7 @@ import { BarChart3, CalendarDays, HandHeart, Users, UsersRound, type LucideIcon 
 import { cn } from '@/lib/utils';
 import type { ReportJenis } from '@/types/report.types';
 import ReportFormModal from './components/ReportFormModal';
+import Breadcrumb from '../../components/Breadcrumb';
 
 interface ReportCardDef {
   jenis: ReportJenis;
@@ -26,6 +27,7 @@ export default function ReportPage() {
 
   return (
     <div className="space-y-4">
+      <Breadcrumb segments={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Report' }]} />
       <div>
         <h1 className="text-xl font-bold text-slate-800">Report</h1>
         <p className="text-sm text-slate-500">Generate laporan data dalam format Excel atau PDF</p>

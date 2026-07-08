@@ -15,6 +15,7 @@ import JemaatFormModal from './components/JemaatFormModal';
 import DeleteJemaatDialog from './components/DeleteJemaatDialog';
 import JemaatTimeline, { type TimelineEntry } from './components/JemaatTimeline';
 import JemaatVolunteerSection from './components/JemaatVolunteerSection';
+import Breadcrumb from '../../components/Breadcrumb';
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -152,6 +153,13 @@ export default function JemaatDetailPage() {
 
   return (
     <div className="space-y-4">
+      <Breadcrumb
+        segments={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Jemaat', href: '/jemaat' },
+          { label: jemaat.nama },
+        ]}
+      />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <Link to="/jemaat" className="text-slate-400 hover:text-slate-600">

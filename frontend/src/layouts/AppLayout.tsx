@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useSessionHeartbeat } from '@/features/auth/useSessionHeartbeat';
+import CommandPalette from '@/components/CommandPalette';
 import LogoutConfirmDialog from '@/layouts/LogoutConfirmDialog';
 import Sidebar from '@/layouts/Sidebar';
 import Topbar from '@/layouts/Topbar';
@@ -25,6 +26,7 @@ export default function AppLayout() {
         </main>
       </div>
       <LogoutConfirmDialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen} />
+      <CommandPalette />
     </div>
   );
 }

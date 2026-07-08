@@ -1,12 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import { Loader2, Plus, Search, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import PrintButton from '@/components/PrintButton';
-import type { StatusKeaktifan } from '@/types/jemaat.types';
-import { listJemaat } from './jemaat.api';
+import Breadcrumb from '@/components/Breadcrumb';
+import BulkActionToolbar from '@/components/BulkActionToolbar';
+import BulkActionSummaryDialog from '@/components/BulkActionSummaryDialog';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import SavedFiltersBar from '@/components/SavedFiltersBar';
+import { useBulkAction, type BulkActionResult } from '@/hooks/useBulkAction';
+import { useSavedFilters } from '@/hooks/useSavedFilters';
+import type { JemaatDependencies, StatusKeaktifan } from '@/types/jemaat.types';
+import { deleteJemaat, listJemaat } from './jemaat.api';
 import { STATUS_FILTER_OPTIONS } from './jemaat.constants';
 import StatusKeaktifanBadge from './components/StatusKeaktifanBadge';
 import JemaatFormModal from './components/JemaatFormModal';
@@ -14,9 +22,33 @@ import JemaatFormModal from './components/JemaatFormModal';
 const PAGE_SIZE = 20;
 const FETCH_LIMIT = 500;
 
+interface JemaatSavedFilter {
+  search: string;
+  status: StatusKeaktifan | 'ALL';
+}
+
 function formatTanggal(dateStr: string | null) {
   if (!dateStr) return '-';
   return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// Ubah bentuk 409 dependency (JemaatDependencies) jadi ringkasan 1 baris
+// yang enak dibaca di ringkasan hasil bulk action.
+function extractDeleteErrorMessage(err: unknown): string {
+  if (isAxiosError<{ detail?: JemaatDependencies; message?: string }>(err)) {
+    const detail = err.response?.data?.detail;
+    if (detail) {
+      const parts: string[] = [];
+      if (detail.isLeaderOfActiveCg.length > 0) parts.push(`leader ${detail.isLeaderOfActiveCg.length} CG aktif`);
+      if (detail.activeMemberOfCg.length > 0) parts.push(`anggota ${detail.activeMemberOfCg.length} CG aktif`);
+      if (detail.scheduledAsVolunteer.length > 0) {
+        parts.push(`terjadwal volunteer di ${detail.scheduledAsVolunteer.length} event`);
+      }
+      if (parts.length > 0) return `Masih ${parts.join(', ')}`;
+    }
+    if (err.response?.data?.message) return err.response.data.message;
+  }
+  return 'Gagal menonaktifkan';
 }
 
 export default function JemaatListPage() {
@@ -34,6 +66,12 @@ export default function JemaatListPage() {
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [formOpen, setFormOpen] = useState(false);
+
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkResults, setBulkResults] = useState<BulkActionResult[] | null>(null);
+  const { run: runBulk, isRunning: isBulkRunning } = useBulkAction();
+
+  const { savedFilters, save: saveFilter, remove: removeFilter } = useSavedFilters<JemaatSavedFilter>('jemaat-list');
 
   // Debounce ~400ms. Hasil sebelumnya TETAP tampil selama menunggu —
   // yang berubah hanya spinner kecil di ujung search box.
@@ -65,11 +103,18 @@ export default function JemaatListPage() {
 
   const hasNoJemaatAtAll = !isLoading && !isError && (data?.length ?? 0) === 0;
   const hasNoFilterResult = !isLoading && !isError && (data?.length ?? 0) > 0 && filtered.length === 0;
+  const hasActiveFilter = searchInput.trim() !== '' || statusFilter !== 'ALL';
 
   function resetFilters() {
     setSearchInput('');
     setDebouncedSearch('');
     setStatusFilter('ALL');
+  }
+
+  function applyFilter(filters: JemaatSavedFilter) {
+    setSearchInput(filters.search);
+    setDebouncedSearch(filters.search);
+    setStatusFilter(filters.status);
   }
 
   function toggleSelect(id: number) {
@@ -94,8 +139,23 @@ export default function JemaatListPage() {
     queryClient.invalidateQueries({ queryKey: ['jemaat', 'list-all'] });
   }
 
+  function jemaatNameById(id: number): string {
+    return data?.find((j) => j.id === id)?.nama ?? `#${id}`;
+  }
+
+  async function handleConfirmBulkDeactivate() {
+    const ids = Array.from(selectedIds);
+    const results = await runBulk(ids, (id) => deleteJemaat(id), extractDeleteErrorMessage);
+    setBulkConfirmOpen(false);
+    setBulkResults(results);
+    setSelectedIds(new Set());
+    queryClient.invalidateQueries({ queryKey: ['jemaat', 'list-all'] });
+  }
+
   return (
     <div className="space-y-4">
+      <Breadcrumb segments={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Jemaat' }]} />
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-800">Jemaat</h1>
@@ -136,6 +196,21 @@ export default function JemaatListPage() {
           ))}
         </select>
       </div>
+
+      <SavedFiltersBar
+        savedFilters={savedFilters}
+        hasActiveFilter={hasActiveFilter}
+        onSave={(name) => saveFilter(name, { search: searchInput, status: statusFilter })}
+        onApply={applyFilter}
+        onRemove={removeFilter}
+      />
+
+      <BulkActionToolbar
+        count={selectedIds.size}
+        actionLabel="Nonaktifkan Terpilih"
+        onAction={() => setBulkConfirmOpen(true)}
+        onClear={() => setSelectedIds(new Set())}
+      />
 
       {isError && (
         <p className="rounded-card border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
@@ -200,7 +275,6 @@ export default function JemaatListPage() {
                   paginated.map((j) => (
                     <tr key={j.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 print:hidden">
-                        {/* TODO Tahap 9: hubungkan ke aksi bulk (aktif/nonaktifkan/hapus massal) */}
                         <input
                           type="checkbox"
                           checked={selectedIds.has(j.id)}
@@ -287,6 +361,23 @@ export default function JemaatListPage() {
       )}
 
       <JemaatFormModal open={formOpen} onOpenChange={setFormOpen} mode="create" onSuccess={handleCreated} />
+
+      <ConfirmDialog
+        open={bulkConfirmOpen}
+        title={`Nonaktifkan ${selectedIds.size} jemaat terpilih?`}
+        description="Setiap jemaat akan dinonaktifkan satu per satu (soft delete). Jemaat dengan dependensi aktif (leader CG, anggota CG, atau terjadwal volunteer) akan dilewati dan dilaporkan gagal."
+        confirmLabel="Ya, Nonaktifkan"
+        isSubmitting={isBulkRunning}
+        onOpenChange={setBulkConfirmOpen}
+        onConfirm={handleConfirmBulkDeactivate}
+      />
+
+      <BulkActionSummaryDialog
+        open={!!bulkResults}
+        results={bulkResults}
+        itemLabel={jemaatNameById}
+        onOpenChange={(open) => !open && setBulkResults(null)}
+      />
     </div>
   );
 }

@@ -19,6 +19,7 @@ import CellGroupFormModal from './components/CellGroupFormModal';
 import DeactivateCgDialog from './components/DeactivateCgDialog';
 import MembersSection from './components/MembersSection';
 import MeetingsSection from './components/MeetingsSection';
+import Breadcrumb from '../../components/Breadcrumb';
 
 type TabKey = 'anggota' | 'meeting';
 
@@ -132,6 +133,13 @@ export default function CellGroupDetailPage() {
 
   return (
     <div className="space-y-4">
+      <Breadcrumb
+        segments={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Cell Group', href: '/cellgroup' },
+          { label: cg.nama },
+        ]}
+      />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <Link to="/cellgroup" className="text-slate-400 hover:text-slate-600">

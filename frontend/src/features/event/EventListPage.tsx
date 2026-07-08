@@ -6,14 +6,32 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import PrintButton from '@/components/PrintButton';
+import Breadcrumb from '@/components/Breadcrumb';
+import BulkActionToolbar from '@/components/BulkActionToolbar';
+import BulkActionSummaryDialog from '@/components/BulkActionSummaryDialog';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import SavedFiltersBar from '@/components/SavedFiltersBar';
+import { useBulkAction, type BulkActionResult } from '@/hooks/useBulkAction';
+import { useSavedFilters } from '@/hooks/useSavedFilters';
 import { cn } from '@/lib/utils';
-import { listEvents } from './event.api';
+import { listEvents, updateEventStatus } from './event.api';
 import { formatEventDate, getEventStatusVariant } from './event.utils';
 import type { EventStatus } from '@/types/event.types';
 import EventFormModal from './components/EventFormModal';
 import EventCalendar from './components/EventCalendar';
 
 type ViewMode = 'list' | 'kalender';
+
+interface EventSavedFilter {
+  status: EventStatus | 'ALL';
+  jenis: string;
+  tanggal: string;
+  search: string;
+}
+
+// Sesuai VALID_STATUS_TRANSITIONS di event.service.js backend: hanya
+// PUBLISHED & SELESAI yang boleh berpindah ke DIARSIPKAN.
+const ARCHIVABLE_STATUSES: EventStatus[] = ['PUBLISHED', 'SELESAI'];
 
 const STATUS_FILTER_OPTIONS: { value: EventStatus | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'Semua Status' },
@@ -34,8 +52,13 @@ export default function EventListPage() {
   const [tanggalFilter, setTanggalFilter] = useState('');
   const [search, setSearch] = useState('');
 
-  // Tanpa param status: ambil semua event, filter multi-kriteria di client
-  // (lebih fleksibel utk kombinasi status+jenis+tanggal+search sekaligus).
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkResults, setBulkResults] = useState<BulkActionResult[] | null>(null);
+  const { run: runBulk, isRunning: isBulkRunning } = useBulkAction();
+
+  const { savedFilters, save: saveFilter, remove: removeFilter } = useSavedFilters<EventSavedFilter>('event-list');
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['event', 'list'],
     queryFn: () => listEvents(),
@@ -59,14 +82,60 @@ export default function EventListPage() {
     });
   }, [data, statusFilter, jenisFilter, tanggalFilter, search]);
 
+  const archivableInView = useMemo(() => filtered.filter((e) => ARCHIVABLE_STATUSES.includes(e.status)), [filtered]);
+
   function handleCreated() {
     queryClient.invalidateQueries({ queryKey: ['event', 'list'] });
   }
 
+  function toggleSelect(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllArchivable() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = archivableInView.length > 0 && archivableInView.every((e) => next.has(e.id));
+      archivableInView.forEach((e) => (allSelected ? next.delete(e.id) : next.add(e.id)));
+      return next;
+    });
+  }
+
+  function applyFilter(filters: EventSavedFilter) {
+    setStatusFilter(filters.status);
+    setJenisFilter(filters.jenis);
+    setTanggalFilter(filters.tanggal);
+    setSearch(filters.search);
+  }
+
+  function eventTitleById(id: number): string {
+    return data?.find((e) => e.id === id)?.judul ?? `#${id}`;
+  }
+
+async function handleConfirmBulkArchive() {
+    const ids = Array.from(selectedIds);
+    const results = await runBulk(ids, async (id) => {
+      await updateEventStatus(id, 'DIARSIPKAN');
+      return { message: 'Event berhasil diarsipkan' };
+    });
+    setBulkConfirmOpen(false);
+    setBulkResults(results);
+    setSelectedIds(new Set());
+    queryClient.invalidateQueries({ queryKey: ['event', 'list'] });
+  }
+
   const isEmpty = !isLoading && !isError && (data?.length ?? 0) === 0;
+  const hasActiveFilter = statusFilter !== 'ALL' || jenisFilter !== 'ALL' || !!tanggalFilter || !!search;
 
   return (
     <div className="space-y-4">
+      <Breadcrumb segments={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Event' }]} />
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-800">Event</h1>
@@ -139,13 +208,8 @@ export default function EventListPage() {
                 </option>
               ))}
             </select>
-            <Input
-              type="date"
-              value={tanggalFilter}
-              onChange={(e) => setTanggalFilter(e.target.value)}
-              className="w-40"
-            />
-            {(statusFilter !== 'ALL' || jenisFilter !== 'ALL' || tanggalFilter || search) && (
+            <Input type="date" value={tanggalFilter} onChange={(e) => setTanggalFilter(e.target.value)} className="w-40" />
+            {hasActiveFilter && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -162,6 +226,36 @@ export default function EventListPage() {
           </>
         )}
       </div>
+
+      {view === 'list' && (
+        <SavedFiltersBar
+          savedFilters={savedFilters}
+          hasActiveFilter={hasActiveFilter}
+          onSave={(name) =>
+            saveFilter(name, { status: statusFilter, jenis: jenisFilter, tanggal: tanggalFilter, search })
+          }
+          onApply={applyFilter}
+          onRemove={removeFilter}
+        />
+      )}
+
+      {view === 'list' && archivableInView.length > 0 && (
+        <label className="flex w-fit items-center gap-2 text-sm text-slate-600 print:hidden">
+          <input
+            type="checkbox"
+            checked={archivableInView.every((e) => selectedIds.has(e.id))}
+            onChange={toggleSelectAllArchivable}
+          />
+          Pilih semua yang bisa diarsipkan ({archivableInView.length})
+        </label>
+      )}
+
+      <BulkActionToolbar
+        count={selectedIds.size}
+        actionLabel="Arsipkan Terpilih"
+        onAction={() => setBulkConfirmOpen(true)}
+        onClear={() => setSelectedIds(new Set())}
+      />
 
       {isError && (
         <p className="rounded-card border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
@@ -200,13 +294,28 @@ export default function EventListPage() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((ev) => {
                 const variant = getEventStatusVariant(ev.status);
+                const canArchive = ARCHIVABLE_STATUSES.includes(ev.status);
                 return (
                   <Link
                     key={ev.id}
                     to={`/event/${ev.id}`}
-                    className="block rounded-card border border-slate-200 p-4 transition-shadow hover:shadow-md"
+                    className="relative block rounded-card border border-slate-200 p-4 transition-shadow hover:shadow-md"
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <label
+                      className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded bg-white/90 shadow print:hidden"
+                      onClick={(e) => e.stopPropagation()}
+                      title={canArchive ? 'Pilih untuk arsipkan massal' : 'Hanya event Published/Selesai yang bisa diarsipkan'}
+                    >
+                      <input
+                        type="checkbox"
+                        disabled={!canArchive}
+                        checked={selectedIds.has(ev.id)}
+                        onChange={() => toggleSelect(ev.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`Pilih ${ev.judul}`}
+                      />
+                    </label>
+                    <div className="flex items-start justify-between gap-2 pl-6">
                       <h3 className="font-semibold text-slate-800">{ev.judul}</h3>
                       <Badge className={variant.className}>{variant.label}</Badge>
                     </div>
@@ -222,6 +331,23 @@ export default function EventListPage() {
       )}
 
       <EventFormModal open={formOpen} onOpenChange={setFormOpen} mode="create" onSuccess={handleCreated} />
+
+      <ConfirmDialog
+        open={bulkConfirmOpen}
+        title={`Arsipkan ${selectedIds.size} event terpilih?`}
+        description="Event yang diarsipkan tidak bisa diubah statusnya lagi. Hanya event berstatus Published/Selesai yang diproses."
+        confirmLabel="Ya, Arsipkan"
+        isSubmitting={isBulkRunning}
+        onOpenChange={setBulkConfirmOpen}
+        onConfirm={handleConfirmBulkArchive}
+      />
+
+      <BulkActionSummaryDialog
+        open={!!bulkResults}
+        results={bulkResults}
+        itemLabel={eventTitleById}
+        onOpenChange={(open) => !open && setBulkResults(null)}
+      />
     </div>
   );
 }

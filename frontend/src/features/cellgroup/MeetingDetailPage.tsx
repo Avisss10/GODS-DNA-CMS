@@ -19,6 +19,7 @@ import { deletePhoto, getMeetingById, listMeetingPhotos, uploadMeetingPhoto } fr
 import MeetingFormModal from './components/MeetingFormModal';
 import PhotoThumbnail from './components/PhotoThumbnail';
 import AbsensiDialog from './components/AbsensiDialog';
+import Breadcrumb from '../../components/Breadcrumb';
 
 const MAX_PHOTOS = 5;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -145,6 +146,14 @@ export default function MeetingDetailPage() {
 
   return (
     <div className="space-y-4">
+      <Breadcrumb
+        segments={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Cell Group', href: '/cellgroup' },
+          { label: 'Detail Cell Group', href: `/cellgroup/${meeting.cg_id}` },
+          { label: meeting.judul },
+        ]}
+      />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <Link to={`/cellgroup/${meeting.cg_id}`} className="text-slate-400 hover:text-slate-600">

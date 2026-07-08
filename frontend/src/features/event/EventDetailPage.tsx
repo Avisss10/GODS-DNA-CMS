@@ -16,6 +16,7 @@ import StatusTransitionDialog from './components/StatusTransitionDialog';
 import VolunteerNeedsSection from './components/VolunteerNeedsSection';
 import VolunteerAssignmentSection from './components/VolunteerAssignmentSection';
 import KehadiranSection from './components/KehadiranSection';
+import Breadcrumb from '../../components/Breadcrumb';
 
 export default function EventDetailPage() {
   const { id: idParam } = useParams<{ id: string }>();
@@ -86,6 +87,13 @@ export default function EventDetailPage() {
 
   return (
     <div className="space-y-4">
+      <Breadcrumb
+        segments={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Event', href: '/event' },
+          { label: event.judul },
+        ]}
+      />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <Link to="/event" className="text-slate-400 hover:text-slate-600">
