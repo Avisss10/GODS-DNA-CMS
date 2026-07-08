@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Loader2, Plus, Search, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import PrintButton from '@/components/PrintButton';
 import type { StatusKeaktifan } from '@/types/jemaat.types';
 import { listJemaat } from './jemaat.api';
 import { STATUS_FILTER_OPTIONS } from './jemaat.constants';
@@ -98,15 +99,18 @@ export default function JemaatListPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-800">Jemaat</h1>
-          <p className="text-sm text-slate-500">Kelola data jemaat gereja</p>
+          <p className="text-sm text-slate-500 print:hidden">Kelola data jemaat gereja</p>
         </div>
-        <Button onClick={() => setFormOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Tambah Jemaat
-        </Button>
+        <div className="flex gap-2 print:hidden">
+          <PrintButton />
+          <Button onClick={() => setFormOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Tambah Jemaat
+          </Button>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center print:hidden">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
@@ -162,12 +166,12 @@ export default function JemaatListPage() {
 
       {!hasNoJemaatAtAll && !hasNoFilterResult && (
         <>
-          {/* Desktop table (>=640px) */}
-          <div className="hidden overflow-x-auto rounded-card border border-slate-200 sm:block">
+          {/* Desktop table (>=640px, dan SELALU tampil saat print) */}
+          <div className="hidden overflow-x-auto rounded-card border border-slate-200 sm:block print:block">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="w-10 px-4 py-3">
+                  <th className="w-10 px-4 py-3 print:hidden">
                     <input
                       type="checkbox"
                       checked={paginated.length > 0 && paginated.every((j) => selectedIds.has(j.id))}
@@ -179,7 +183,7 @@ export default function JemaatListPage() {
                   <th className="px-4 py-3">Tanggal Bergabung</th>
                   <th className="px-4 py-3">Skor Keaktifan</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Aksi</th>
+                  <th className="px-4 py-3 text-right print:hidden">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -195,7 +199,7 @@ export default function JemaatListPage() {
                 {!isLoading &&
                   paginated.map((j) => (
                     <tr key={j.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 print:hidden">
                         {/* TODO Tahap 9: hubungkan ke aksi bulk (aktif/nonaktifkan/hapus massal) */}
                         <input
                           type="checkbox"
@@ -210,7 +214,7 @@ export default function JemaatListPage() {
                       <td className="px-4 py-3">
                         <StatusKeaktifanBadge status={j.status_keaktifan} />
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right print:hidden">
                         <Link to={`/jemaat/${j.id}`} className="text-sm font-medium text-accent-from hover:underline">
                           Lihat detail
                         </Link>
@@ -221,8 +225,8 @@ export default function JemaatListPage() {
             </table>
           </div>
 
-          {/* Mobile card-list (<640px) */}
-          <div className="space-y-3 sm:hidden">
+          {/* Mobile card-list (<640px, disembunyikan saat print supaya tidak dobel dgn tabel) */}
+          <div className="space-y-3 sm:hidden print:hidden">
             {isLoading &&
               Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="h-28 animate-pulse rounded-card bg-slate-100" />
@@ -260,7 +264,7 @@ export default function JemaatListPage() {
           </div>
 
           {filtered.length > 0 && (
-            <div className="flex items-center justify-between pt-2 text-sm text-slate-600">
+            <div className="flex items-center justify-between pt-2 text-sm text-slate-600 print:hidden">
               <span>
                 Halaman {page} dari {totalPages} ({filtered.length} jemaat)
               </span>

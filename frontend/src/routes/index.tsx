@@ -13,6 +13,7 @@ import MeetingDetailPage from '@/features/cellgroup/MeetingDetailPage';
 import VolunteerTypeListPage from '@/features/volunteer/VolunteerTypeListPage';
 import EventListPage from '@/features/event/EventListPage';
 import EventDetailPage from '@/features/event/EventDetailPage';
+import ReportPage from '@/features/report/ReportPage';
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/dashboard" replace /> },
@@ -36,7 +37,7 @@ export const router = createBrowserRouter([
           { path: '/event', element: <EventListPage />, handle: { title: 'Event' } },
           { path: '/event/:id', element: <EventDetailPage />, handle: { title: 'Detail Event' } },
           { path: '/volunteer', element: <VolunteerTypeListPage />, handle: { title: 'Volunteer' } },
-          { path: '/report', element: <PlaceholderPage title="Report" />, handle: { title: 'Report' } },
+          { path: '/report', element: <ReportPage />, handle: { title: 'Report' } },
           {
             element: <ProtectedRoute allowedRoles={['LEADER']} />,
             children: [

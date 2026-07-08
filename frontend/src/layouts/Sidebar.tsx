@@ -56,7 +56,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onRequestLogout }: 
     <>
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/40 sm:hidden"
+          className="fixed inset-0 z-40 bg-black/40 sm:hidden print:hidden"
           onClick={onCloseMobile}
           aria-hidden="true"
         />
@@ -64,7 +64,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onRequestLogout }: 
 
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-sidebar transition-transform duration-200 sm:static sm:z-auto sm:w-16 sm:translate-x-0 lg:w-64',
+          'fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-sidebar transition-transform duration-200 sm:static sm:z-auto sm:w-16 sm:translate-x-0 lg:w-64 print:hidden',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >

@@ -5,6 +5,7 @@ import { CalendarDays, List, Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import PrintButton from '@/components/PrintButton';
 import { cn } from '@/lib/utils';
 import { listEvents } from './event.api';
 import { formatEventDate, getEventStatusVariant } from './event.utils';
@@ -69,15 +70,18 @@ export default function EventListPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-800">Event</h1>
-          <p className="text-sm text-slate-500">Kelola event dan penugasan volunteer pelayanan</p>
+          <p className="text-sm text-slate-500 print:hidden">Kelola event dan penugasan volunteer pelayanan</p>
         </div>
-        <Button onClick={() => setFormOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Buat Event
-        </Button>
+        <div className="flex gap-2 print:hidden">
+          <PrintButton />
+          <Button onClick={() => setFormOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Buat Event
+          </Button>
+       </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 print:hidden">
         <div className="flex rounded-card border border-slate-200 p-0.5">
           <button
             type="button"

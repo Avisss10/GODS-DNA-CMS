@@ -12,15 +12,15 @@ export default function AppLayout() {
   useSessionHeartbeat();
 
   return (
-    <div className="flex min-h-screen bg-surface">
+    <div className="flex min-h-screen bg-surface print:block print:bg-white">
       <Sidebar
         mobileOpen={mobileOpen}
         onCloseMobile={() => setMobileOpen(false)}
         onRequestLogout={() => setLogoutDialogOpen(true)}
       />
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col print:block">
         <Topbar onOpenMobileMenu={() => setMobileOpen(true)} onRequestLogout={() => setLogoutDialogOpen(true)} />
-        <main className="flex-1 p-4 sm:p-6">
+        <main className="flex-1 p-4 sm:p-6 print:p-0">
           <Outlet />
         </main>
       </div>

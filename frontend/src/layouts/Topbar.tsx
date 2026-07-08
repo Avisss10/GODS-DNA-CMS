@@ -39,7 +39,7 @@ export default function Topbar({ onOpenMobileMenu, onRequestLogout }: TopbarProp
       .find(Boolean) ?? '';
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-300/60 bg-card px-4 sm:px-6">
+    <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-300/60 bg-card px-4 sm:px-6 print:hidden">
       <div className="flex min-w-0 items-center gap-3">
         <button
           type="button"
