@@ -11,6 +11,8 @@ import CellGroupListPage from '@/features/cellgroup/CellGroupListPage';
 import CellGroupDetailPage from '@/features/cellgroup/CellGroupDetailPage';
 import MeetingDetailPage from '@/features/cellgroup/MeetingDetailPage';
 import VolunteerTypeListPage from '@/features/volunteer/VolunteerTypeListPage';
+import EventListPage from '@/features/event/EventListPage';
+import EventDetailPage from '@/features/event/EventDetailPage';
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/dashboard" replace /> },
@@ -31,7 +33,8 @@ export const router = createBrowserRouter([
             element: <MeetingDetailPage />,
             handle: { title: 'Detail Meeting' },
           },
-          { path: '/event', element: <PlaceholderPage title="Event" />, handle: { title: 'Event' } },
+          { path: '/event', element: <EventListPage />, handle: { title: 'Event' } },
+          { path: '/event/:id', element: <EventDetailPage />, handle: { title: 'Detail Event' } },
           { path: '/volunteer', element: <VolunteerTypeListPage />, handle: { title: 'Volunteer' } },
           { path: '/report', element: <PlaceholderPage title="Report" />, handle: { title: 'Report' } },
           {

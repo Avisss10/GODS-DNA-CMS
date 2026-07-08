@@ -1,6 +1,7 @@
 import type { EventListItem } from '@/features/event/event.api';
 import type { JemaatListItem, StatusKeaktifan } from '@/features/jemaat/jemaat.api';
 export { STATUS_LABELS, STATUS_COLORS } from '@/features/jemaat/jemaat.constants';
+export { formatEventDate, getEventStatusVariant } from '@/features/event/event.utils';
 
 export function countByStatusKeaktifan(list: JemaatListItem[]): Record<StatusKeaktifan, number> {
   const counts: Record<StatusKeaktifan, number> = {
@@ -41,8 +42,6 @@ export interface BirthdayEntry {
   daysUntil: number;
 }
 
-// tgl_lahir dari backend berformat 'YYYY-MM-DD' (plaintext hasil dekripsi).
-// Bulan+tanggal dibandingkan terhadap hari ini, tahun diabaikan.
 export function getUpcomingBirthdays(list: JemaatListItem[], daysAhead = 7): BirthdayEntry[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -73,16 +72,6 @@ export function getUpcomingBirthdays(list: JemaatListItem[], daysAhead = 7): Bir
   return entries.sort((a, b) => a.daysUntil - b.daysUntil);
 }
 
-export function formatEventDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleString('id-ID', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
 export function formatBirthdayDate(dateStr: string): string {
@@ -106,26 +95,4 @@ export function formatRelativeTime(dateStr: string): string {
   const diffWeek = Math.floor(diffDay / 7);
   if (diffWeek < 5) return `${diffWeek} minggu lalu`;
   return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-interface EventStatusVariant {
-  label: string;
-  className: string;
-}
-
-export function getEventStatusVariant(status: EventListItem['status']): EventStatusVariant {
-  switch (status) {
-    case 'DRAFT':
-      return { label: 'Draft', className: 'border-transparent bg-slate-200 text-slate-700' };
-    case 'PUBLISHED':
-      return { label: 'Published', className: 'border-transparent bg-blue-100 text-blue-700' };
-    case 'AKTIF':
-      return { label: 'Aktif', className: 'border-transparent bg-status-aktif/15 text-status-aktif' };
-    case 'SELESAI':
-      return { label: 'Selesai', className: 'border-transparent bg-slate-200 text-slate-600' };
-    case 'DIARSIPKAN':
-      return { label: 'Diarsipkan', className: 'border-transparent bg-slate-300 text-slate-500' };
-    default:
-      return { label: status, className: 'border-transparent bg-slate-200 text-slate-700' };
-  }
 }
