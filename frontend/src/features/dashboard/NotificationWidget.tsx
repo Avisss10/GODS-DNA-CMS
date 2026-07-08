@@ -4,19 +4,19 @@ import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getUnreadCount, listNotifications } from '@/features/notification/notification.api';
+import { getUnreadCount, listNotifications, notificationKeys } from '@/features/notification/notification.api';
 import { formatRelativeTime } from './dashboard.utils';
 
 export default function NotificationWidget() {
   const navigate = useNavigate();
 
   const countQuery = useQuery({
-    queryKey: ['dashboard', 'notification-unread-count'],
+    queryKey: notificationKeys.unreadCount(),
     queryFn: getUnreadCount,
   });
 
   const listQuery = useQuery({
-    queryKey: ['dashboard', 'notification-list'],
+    queryKey: notificationKeys.list(true),
     queryFn: () => listNotifications({ unread: true }),
   });
 

@@ -3,7 +3,6 @@ import LoginPage from '@/features/auth/LoginPage';
 import AppLayout from '@/layouts/AppLayout';
 import DashboardPage from '@/routes/DashboardPage';
 import NotFoundPage from '@/routes/NotFoundPage';
-import PlaceholderPage from '@/routes/PlaceholderPage';
 import ProtectedRoute from '@/routes/ProtectedRoute';
 import JemaatDetailPage from '@/features/jemaat/JemaatDetailPage';
 import JemaatListPage from '@/features/jemaat/JemaatListPage';
@@ -14,6 +13,9 @@ import VolunteerTypeListPage from '@/features/volunteer/VolunteerTypeListPage';
 import EventListPage from '@/features/event/EventListPage';
 import EventDetailPage from '@/features/event/EventDetailPage';
 import ReportPage from '@/features/report/ReportPage';
+import NotificationPage from '@/features/notification/NotificationPage';
+import AuditLogPage from '@/features/auditlog/AuditLogPage';
+import UserManagementPage from '@/features/user/UserManagementPage';
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/dashboard" replace /> },
@@ -41,11 +43,11 @@ export const router = createBrowserRouter([
           {
             element: <ProtectedRoute allowedRoles={['LEADER']} />,
             children: [
-              { path: '/audit-log', element: <PlaceholderPage title="Audit Log" />, handle: { title: 'Audit Log' } },
-              { path: '/notification', element: <PlaceholderPage title="Notification" />, handle: { title: 'Notification' } },
+              { path: '/audit-log', element: <AuditLogPage />, handle: { title: 'Audit Log' } },
+              { path: '/notification', element: <NotificationPage />, handle: { title: 'Notification' } },
               {
                 path: '/user-management',
-                element: <PlaceholderPage title="User Management" />,
+                element: <UserManagementPage />,
                 handle: { title: 'User Management' },
               },
             ],

@@ -1,0 +1,135 @@
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { AlertTriangle, ScrollText, Search } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { listAuditLogs, type AuditLogFilterParams, type AuditLogItem } from './auditlog.api';
+import { AKSI_OPTIONS, MODUL_OPTIONS } from './auditlog.constants';
+import AuditLogDiffModal from './components/AuditLogDiffModal';
+
+const SELECT_CLASS =
+  'h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
+
+const EMPTY_FILTERS: AuditLogFilterParams = {
+  modul: '', aksi: '', userId: '', objectId: '', startDate: '', endDate: '',
+};
+
+export default function AuditLogPage() {
+  const [filters, setFilters] = useState<AuditLogFilterParams>(EMPTY_FILTERS);
+  const [selectedItem, setSelectedItem] = useState<AuditLogItem | null>(null);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['audit-logs', 'list', filters],
+    queryFn: () => listAuditLogs(filters),
+  });
+
+  const items = data ?? [];
+  const hasActiveFilter = Object.values(filters).some((v) => v);
+
+  function updateFilter<K extends keyof AuditLogFilterParams>(key: K, value: AuditLogFilterParams[K]) {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="flex items-center gap-2 text-xl font-bold text-slate-800">
+          <ScrollText className="h-5 w-5 text-modul-auditlog" />
+          Audit Log
+        </h1>
+        <p className="text-sm text-slate-500">Riwayat aktivitas seluruh modul, terverifikasi HMAC</p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 rounded-card border border-slate-200 bg-card p-3">
+        <select value={filters.modul} onChange={(e) => updateFilter('modul', e.target.value)} className={SELECT_CLASS}>
+          <option value="">Semua Modul</option>
+          {MODUL_OPTIONS.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+
+        <select value={filters.aksi} onChange={(e) => updateFilter('aksi', e.target.value)} className={SELECT_CLASS}>
+          <option value="">Semua Aksi</option>
+          {AKSI_OPTIONS.map((a) => (
+            <option key={a} value={a}>{a}</option>
+          ))}
+        </select>
+
+        <Input placeholder="User ID" value={filters.userId} onChange={(e) => updateFilter('userId', e.target.value)} className="w-28" />
+        <Input placeholder="Object ID" value={filters.objectId} onChange={(e) => updateFilter('objectId', e.target.value)} className="w-28" />
+        <Input type="date" value={filters.startDate} onChange={(e) => updateFilter('startDate', e.target.value)} className="w-40" />
+        <Input type="date" value={filters.endDate} onChange={(e) => updateFilter('endDate', e.target.value)} className="w-40" />
+
+        {hasActiveFilter && (
+          <Button variant="ghost" size="sm" onClick={() => setFilters(EMPTY_FILTERS)}>
+            Reset Filter
+          </Button>
+        )}
+      </div>
+
+      {isError && (
+        <p className="rounded-card border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          Gagal memuat audit log. Silakan muat ulang halaman.
+        </p>
+      )}
+
+      {isLoading && (
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-10 animate-pulse rounded-card bg-slate-100" />
+          ))}
+        </div>
+      )}
+
+      {!isLoading && !isError && items.length === 0 && (
+        <div className="flex flex-col items-center gap-2 rounded-card border border-dashed border-slate-300 py-16 text-center">
+          <Search className="h-10 w-10 text-slate-300" />
+          <p className="font-medium text-slate-600">Tidak ada audit log yang cocok dengan filter</p>
+        </div>
+      )}
+
+      {!isLoading && items.length > 0 && (
+        <div className="overflow-x-auto rounded-card border border-slate-200">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-4 py-3 font-medium">ID</th>
+                <th className="px-4 py-3 font-medium">Modul</th>
+                <th className="px-4 py-3 font-medium">Aksi</th>
+                <th className="px-4 py-3 font-medium">Object ID</th>
+                <th className="px-4 py-3 font-medium">User ID</th>
+                <th className="px-4 py-3 font-medium">Waktu</th>
+                <th className="px-4 py-3 font-medium text-center">Integritas</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {items.map((row) => (
+                <tr
+                  key={row.id}
+                  onClick={() => setSelectedItem(row)}
+                  className="cursor-pointer transition-colors hover:bg-slate-50"
+                >
+                  <td className="px-4 py-3 text-slate-500">{row.id}</td>
+                  <td className="px-4 py-3 font-medium text-slate-800">{row.modul}</td>
+                  <td className="px-4 py-3 text-slate-600">{row.aksi}</td>
+                  <td className="px-4 py-3 text-slate-600">{row.object_id ?? '-'}</td>
+                  <td className="px-4 py-3 text-slate-600">{row.user_id ?? '-'}</td>
+                  <td className="px-4 py-3 text-slate-500">{new Date(row.created_at).toLocaleString('id-ID')}</td>
+                  <td className="px-4 py-3 text-center">
+                    {row.hmac_status !== 'OK' && (
+                      <span title={`hmac_status: ${row.hmac_status}`}>
+                        <AlertTriangle className="mx-auto h-4 w-4 text-red-600" />
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <AuditLogDiffModal item={selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)} />
+    </div>
+  );
+}

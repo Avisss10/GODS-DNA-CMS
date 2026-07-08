@@ -1,5 +1,6 @@
+import { useQuery } from '@tanstack/react-query';
 import { Bell, LogOut, Menu, Search } from 'lucide-react';
-import { useMatches } from 'react-router-dom';
+import { useMatches, useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
@@ -9,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { getUnreadCount, notificationKeys } from '@/features/notification/notification.api';
 import { useAuthStore } from '@/store/auth.store';
 
 interface TopbarProps {
@@ -27,10 +29,25 @@ function getInitials(nama: string | null): string {
     .toUpperCase();
 }
 
+// Polling ringan tiap 30 detik. Query key sama dengan NotificationPage &
+// dashboard widget, jadi invalidate di satu tempat ikut menyegarkan di sini.
+const UNREAD_COUNT_POLL_MS = 30_000;
+
 export default function Topbar({ onOpenMobileMenu, onRequestLogout }: TopbarProps) {
   const matches = useMatches();
+  const navigate = useNavigate();
   const nama = useAuthStore((s) => s.nama);
   const peran = useAuthStore((s) => s.peran);
+
+  // Endpoint notifikasi LEADER-only di backend — jangan fetch kalau ADMIN (403).
+  const unreadCountQuery = useQuery({
+    queryKey: notificationKeys.unreadCount(),
+    queryFn: getUnreadCount,
+    enabled: peran === 'LEADER',
+    refetchInterval: UNREAD_COUNT_POLL_MS,
+  });
+
+  const unreadCount = unreadCountQuery.data ?? 0;
 
   const title =
     [...matches]
@@ -58,9 +75,21 @@ export default function Topbar({ onOpenMobileMenu, onRequestLogout }: TopbarProp
           <Input placeholder="Cari cepat..." className="w-48 pl-8 lg:w-64" />
         </div>
 
-        <button type="button" className="relative rounded-card p-2 hover:bg-black/5" aria-label="Notifikasi">
-          <Bell className="h-5 w-5 text-slate-700" />
-        </button>
+        {peran === 'LEADER' && (
+          <button
+            type="button"
+            className="relative rounded-card p-2 hover:bg-black/5"
+            aria-label="Notifikasi"
+            onClick={() => navigate('/notification')}
+          >
+            <Bell className="h-5 w-5 text-slate-700" />
+            {unreadCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
