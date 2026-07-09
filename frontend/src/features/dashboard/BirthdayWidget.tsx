@@ -1,6 +1,8 @@
 import { Cake } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import EmptyState from '@/components/EmptyState';
+import ErrorState from '@/components/ErrorState';
 import type { JemaatListItem } from '@/features/jemaat/jemaat.api';
 import { formatBirthdayDate, getUpcomingBirthdays } from './dashboard.utils';
 
@@ -28,9 +30,9 @@ export default function BirthdayWidget({ data, isLoading, isError }: BirthdayWid
             <Skeleton className="h-8 w-full" />
           </div>
         ) : isError ? (
-          <p className="text-sm text-destructive">Gagal memuat data jemaat</p>
+          <ErrorState message="Gagal memuat data jemaat" className="border-none bg-transparent py-4" />
         ) : birthdays.length === 0 ? (
-          <p className="text-sm text-slate-500">Tidak ada ulang tahun jemaat dalam 7 hari ke depan</p>
+          <EmptyState icon={Cake} title="Tidak ada ulang tahun jemaat dalam 7 hari ke depan" className="border-none py-4" />
         ) : (
           birthdays.map((b) => (
             <div key={b.id} className="flex items-center justify-between gap-3 rounded-md p-2">

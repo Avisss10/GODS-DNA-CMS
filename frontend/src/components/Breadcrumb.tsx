@@ -25,7 +25,7 @@ export default function Breadcrumb({ segments, className }: BreadcrumbProps) {
           <span key={`${seg.label}-${i}`} className="flex items-center gap-1.5">
             {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
             {seg.href && !isLast ? (
-              <Link to={seg.href} className="text-slate-500 hover:text-accent-from hover:underline">
+              <Link to={seg.href} className="text-slate-500 transition-smooth hover:text-accent-from hover:underline">
                 {seg.label}
               </Link>
             ) : (

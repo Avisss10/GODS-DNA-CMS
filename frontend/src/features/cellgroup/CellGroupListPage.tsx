@@ -4,11 +4,15 @@ import { Link } from 'react-router-dom';
 import { Plus, UsersRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import Breadcrumb from '@/components/Breadcrumb';
 import BulkActionToolbar from '@/components/BulkActionToolbar';
 import BulkActionSummaryDialog from '@/components/BulkActionSummaryDialog';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import EmptyState from '@/components/EmptyState';
+import ErrorState from '@/components/ErrorState';
 import PulsingDot from '@/components/PulsingDot';
+import { cn } from '@/lib/utils';
 import { useBulkAction, type BulkActionResult } from '@/hooks/useBulkAction';
 import { deactivateCellGroup, listCellGroups } from './cellgroup.api';
 import CellGroupFormModal from './components/CellGroupFormModal';
@@ -83,29 +87,27 @@ export default function CellGroupListPage() {
         </Button>
       </div>
 
-      {isError && (
-        <p className="rounded-card border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Gagal memuat data Cell Group. Silakan muat ulang halaman.
-        </p>
-      )}
+      {isError && <ErrorState message="Gagal memuat data Cell Group. Silakan muat ulang halaman." />}
 
       {isLoading && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-36 animate-pulse rounded-card bg-slate-100" />
+            <Skeleton key={i} className="h-36 rounded-xl" />
           ))}
         </div>
       )}
 
       {isEmpty && (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-slate-300 py-16 text-center">
-          <UsersRound className="h-10 w-10 text-slate-300" />
-          <p className="font-medium text-slate-600">Belum ada Cell Group</p>
-          <Button onClick={() => setFormOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Tambah Cell Group
-          </Button>
-        </div>
+        <EmptyState
+          icon={UsersRound}
+          title="Belum ada Cell Group"
+          action={
+            <Button onClick={() => setFormOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Tambah Cell Group
+            </Button>
+          }
+        />
       )}
 
       {!isLoading && !isEmpty && (
@@ -133,7 +135,9 @@ export default function CellGroupListPage() {
               <Link
                 key={cg.id}
                 to={`/cellgroup/${cg.id}`}
-                className="relative block rounded-card border border-slate-200 p-4 transition-shadow hover:shadow-md"
+                className={cn(
+                  'relative block rounded-xl border-y border-r border-l-4 border-y-slate-200/70 border-r-slate-200/70 border-l-modul-cellgroup bg-card p-4 shadow-card transition-smooth hover:-translate-y-0.5 hover:shadow-card-hover',
+                )}
               >
                 {cg.is_active && (
                   <label

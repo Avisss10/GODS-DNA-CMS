@@ -2,6 +2,8 @@ import { CalendarDays } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import EmptyState from '@/components/EmptyState';
+import ErrorState from '@/components/ErrorState';
 import type { EventListItem } from '@/features/event/event.api';
 import { formatEventDate, getEventStatusVariant, getUpcomingEvents } from './dashboard.utils';
 
@@ -30,9 +32,9 @@ export default function UpcomingEventsWidget({ data, isLoading, isError }: Upcom
             <Skeleton className="h-10 w-full" />
           </div>
         ) : isError ? (
-          <p className="text-sm text-destructive">Gagal memuat data event</p>
+          <ErrorState message="Gagal memuat data event" className="border-none bg-transparent py-4" />
         ) : upcoming.length === 0 ? (
-          <p className="text-sm text-slate-500">Tidak ada event mendatang</p>
+          <EmptyState icon={CalendarDays} title="Tidak ada event mendatang" className="border-none py-4" />
         ) : (
           upcoming.map((event) => {
             const statusInfo = getEventStatusVariant(event.status);
@@ -40,7 +42,7 @@ export default function UpcomingEventsWidget({ data, isLoading, isError }: Upcom
               // TODO: arahkan ke halaman detail event setelah Tahap 6 (detail event) tersedia
               <div
                 key={event.id}
-                className="flex items-center justify-between gap-3 rounded-md border border-transparent p-2 hover:border-border"
+                className="flex items-center justify-between gap-3 rounded-md border border-transparent p-2 transition-smooth hover:border-border"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-slate-800">{event.judul}</p>

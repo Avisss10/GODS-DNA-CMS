@@ -6,6 +6,15 @@ import { toast } from '@/lib/toast';
 import { KeyRound, Plus, UserCog } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import PulsingDot from '@/components/PulsingDot';
 import { listUsers, updateUserStatus, type ManagedUser } from './user.api';
 import CreateUserModal from './components/CreateUserModal';
@@ -87,48 +96,60 @@ export default function UserManagementPage() {
       {isLoading && (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-14 animate-pulse rounded-card bg-slate-100" />
+            <Skeleton key={i} className="h-14 rounded-card" />
           ))}
         </div>
       )}
 
-      {!isLoading && !isError && (
+      {!isLoading && !isError && items.length === 0 && (
+        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-slate-300 py-16 text-center">
+          <UserCog className="h-10 w-10 text-slate-300" />
+          <p className="font-medium text-slate-600">Belum ada user lain</p>
+          <p className="max-w-sm text-xs text-slate-400">Tambahkan akun LEADER atau ADMIN baru untuk mulai mengelola akses.</p>
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Tambah User
+          </Button>
+        </div>
+      )}
+
+      {!isLoading && !isError && items.length > 0 && (
         <>
           {/* Desktop/tablet */}
-          <div className="hidden overflow-x-auto rounded-card border border-slate-200 sm:block">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Username</th>
-                  <th className="px-4 py-3 font-medium">Role</th>
-                  <th className="px-4 py-3 font-medium">Status Aktif</th>
-                  <th className="px-4 py-3 font-medium">Last Login</th>
-                  <th className="px-4 py-3 font-medium text-right">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+          <div className="hidden sm:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Username</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Status Aktif</TableHead>
+                  <TableHead>Last Login</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {items.map((u) => (
-                  <tr key={u.id} className={!u.aktif ? 'opacity-60' : undefined}>
-                    <td className="px-4 py-3 font-medium text-slate-800">{u.username}</td>
-                    <td className="px-4 py-3">
+                  <TableRow key={u.id} className={!u.aktif ? 'opacity-60' : undefined}>
+                    <TableCell className="font-medium text-slate-800">{u.username}</TableCell>
+                    <TableCell>
                       {/* Role read-only: badge saja — tidak ada endpoint update peran. */}
                       <Badge variant="secondary">{u.peran}</Badge>
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell>
                       <div className="flex items-center gap-2">
                         <StatusToggleSwitch
                           checked={u.aktif}
                           label={`Ubah status akun ${u.username}`}
                           onClick={() => setToggleTarget(u)}
                         />
-                        <Badge variant={u.aktif ? 'default' : 'secondary'} className="gap-1.5">
+                        <Badge variant={u.aktif ? 'default' : 'secondary'}>
                           {u.aktif && <PulsingDot colorClass="bg-status-aktif" />}
                           {u.aktif ? 'Aktif' : 'Nonaktif'}
                         </Badge>
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{formatLastLogin(u.last_login_at)}</td>
-                    <td className="px-4 py-3 text-right">
+                    </TableCell>
+                    <TableCell className="text-slate-600">{formatLastLogin(u.last_login_at)}</TableCell>
+                    <TableCell className="text-right">
                       {/* Sembunyi total utk baris LEADER — backend selalu 403. */}
                       {u.peran === 'ADMIN' && (
                         <Button variant="outline" size="sm" onClick={() => setResetTarget(u)}>
@@ -136,11 +157,11 @@ export default function UserManagementPage() {
                           Reset Password
                         </Button>
                       )}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
 
           {/* Mobile: card-list */}

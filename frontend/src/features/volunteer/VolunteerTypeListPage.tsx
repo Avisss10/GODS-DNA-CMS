@@ -5,6 +5,15 @@ import { toast } from '@/lib/toast';
 import { HandHeart, Pencil, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import PulsingDot from '@/components/PulsingDot';
 import {
   activateVolunteerType,
@@ -117,7 +126,7 @@ export default function VolunteerTypeListPage() {
       {isLoading && (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-14 animate-pulse rounded-card bg-slate-100" />
+            <Skeleton key={i} className="h-14 rounded-card" />
           ))}
         </div>
       )}
@@ -136,29 +145,29 @@ export default function VolunteerTypeListPage() {
       {!isLoading && !isEmpty && (
         <>
           {/* Desktop/tablet: tabel biasa, disembunyikan di mobile */}
-          <div className="hidden overflow-x-auto rounded-card border border-slate-200 sm:block">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Nama</th>
-                  <th className="px-4 py-3 font-medium">Deskripsi</th>
-                  <th className="px-4 py-3 font-medium">Jumlah Anggota</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium text-right">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+          <div className="hidden sm:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Nama</TableHead>
+                  <TableHead>Deskripsi</TableHead>
+                  <TableHead>Jumlah Anggota</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data!.map((item) => (
-                  <tr
+                  <TableRow
                     key={item.id}
                     className={cn('transition-opacity', !item.is_active && 'opacity-60')}
                   >
-                    <td className="px-4 py-3 font-medium text-slate-800">{item.nama}</td>
-                    <td className="max-w-xs px-4 py-3 text-slate-600">
+                    <TableCell className="font-medium text-slate-800">{item.nama}</TableCell>
+                    <TableCell className="max-w-xs text-slate-600">
                       <span className="line-clamp-2">{item.deskripsi || '-'}</span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{item.jumlah_anggota}</td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell className="text-slate-600">{item.jumlah_anggota}</TableCell>
+                    <TableCell>
                       <div className="flex items-center gap-2">
                         <StatusToggleSwitch
                           checked={item.is_active}
@@ -166,22 +175,22 @@ export default function VolunteerTypeListPage() {
                           label={`Ubah status jenis volunteer ${item.nama}`}
                           onClick={() => handleToggleClick(item)}
                         />
-                        <Badge variant={item.is_active ? 'default' : 'secondary'} className="gap-1.5">
+                        <Badge variant={item.is_active ? 'default' : 'secondary'}>
                           {item.is_active && <PulsingDot colorClass="bg-status-aktif" />}
                           {item.is_active ? 'Aktif' : 'Nonaktif'}
                         </Badge>
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
+                    </TableCell>
+                    <TableCell className="text-right">
                       <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
                         <Pencil className="h-3.5 w-3.5" />
                         Edit
                       </Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
 
           {/* Mobile: card-list, disembunyikan di tablet ke atas */}

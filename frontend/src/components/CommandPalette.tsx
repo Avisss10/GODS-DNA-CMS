@@ -207,8 +207,8 @@ export default function CommandPalette() {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 p-4 pt-24" onClick={closePalette}>
-      <div className="w-full max-w-xl overflow-hidden rounded-card bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[100] flex items-start justify-center bg-slate-900/50 p-4 pt-24 backdrop-blur-sm" onClick={closePalette}>
+      <div className="w-full max-w-xl overflow-hidden rounded-xl border border-slate-200/70 bg-card shadow-popover" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2 border-b border-slate-200 px-4">
           <Search className="h-4 w-4 shrink-0 text-slate-400" />
           <input
@@ -254,7 +254,7 @@ export default function CommandPalette() {
                     onMouseEnter={() => setHighlightIndex(index)}
                     onClick={() => goToItem(item)}
                     className={cn(
-                      'flex w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm',
+                      'flex w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm transition-smooth',
                       isHighlighted ? 'bg-accent-from/10' : 'hover:bg-slate-50',
                     )}
                   >

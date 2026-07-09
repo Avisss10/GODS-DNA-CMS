@@ -56,11 +56,11 @@ export default function Topbar({ onOpenMobileMenu, onRequestLogout }: TopbarProp
       .find(Boolean) ?? '';
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-300/60 bg-card px-4 sm:px-6 print:hidden">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-300/60 bg-card/95 px-4 shadow-topbar backdrop-blur-sm sm:px-6 print:hidden">
       <div className="flex min-w-0 items-center gap-3">
         <button
           type="button"
-          className="rounded-card p-2 hover:bg-black/5 sm:hidden"
+          className="rounded-card p-2 transition-smooth hover:bg-black/5 sm:hidden"
           onClick={onOpenMobileMenu}
           aria-label="Buka menu"
         >
@@ -78,14 +78,17 @@ export default function Topbar({ onOpenMobileMenu, onRequestLogout }: TopbarProp
         {peran === 'LEADER' && (
           <button
             type="button"
-            className="relative rounded-card p-2 hover:bg-black/5"
+            className="relative rounded-card p-2 transition-smooth hover:bg-black/5"
             aria-label="Notifikasi"
             onClick={() => navigate('/notification')}
           >
             <Bell className="h-5 w-5 text-slate-700" />
             {unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
-                {unreadCount > 9 ? '9+' : unreadCount}
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                <span className="relative flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
               </span>
             )}
           </button>

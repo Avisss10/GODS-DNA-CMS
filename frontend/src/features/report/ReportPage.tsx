@@ -39,7 +39,7 @@ export default function ReportPage() {
             key={card.jenis}
             type="button"
             onClick={() => setActiveJenis(card.jenis)}
-            className="group relative overflow-hidden rounded-card border border-slate-200 bg-card p-4 text-left transition-shadow hover:shadow-md"
+            className="group relative overflow-hidden rounded-xl border border-slate-200/70 bg-card p-4 text-left shadow-card transition-smooth hover:-translate-y-0.5 hover:shadow-card-hover"
           >
             <span className={cn('absolute inset-y-0 left-0 w-1', card.accentClass)} aria-hidden="true" />
             <div className="flex items-center gap-3 pl-2">

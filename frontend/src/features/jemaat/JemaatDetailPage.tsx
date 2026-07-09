@@ -7,6 +7,7 @@ import { ArrowLeft, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import ErrorState from '@/components/ErrorState';
 import type { JemaatDependencies } from '@/types/jemaat.types';
 import { deleteJemaat, getJemaatCellGroups, getJemaatEventHistory, getJemaatFull } from './jemaat.api';
 import { listVolunteerByJemaat } from '@/features/volunteer/volunteer.api';
@@ -125,7 +126,7 @@ export default function JemaatDetailPage() {
   }
 
   if (!Number.isFinite(id)) {
-    return <p className="text-sm text-destructive">ID jemaat tidak valid.</p>;
+    return <ErrorState message="ID jemaat tidak valid." />;
   }
 
   if (fullQuery.isLoading) {
@@ -140,12 +141,14 @@ export default function JemaatDetailPage() {
 
   if (fullQuery.isError || !fullQuery.data) {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-destructive">Gagal memuat data jemaat, atau jemaat tidak ditemukan.</p>
-        <Button variant="outline" onClick={() => navigate('/jemaat')}>
-          <ArrowLeft className="h-4 w-4" /> Kembali ke daftar
-        </Button>
-      </div>
+      <ErrorState
+        message="Gagal memuat data jemaat, atau jemaat tidak ditemukan."
+        action={
+          <Button variant="outline" size="sm" onClick={() => navigate('/jemaat')}>
+            <ArrowLeft className="h-4 w-4" /> Kembali ke daftar
+          </Button>
+        }
+      />
     );
   }
 

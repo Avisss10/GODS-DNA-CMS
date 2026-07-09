@@ -4,6 +4,9 @@ import { toast } from '@/lib/toast';
 import { AlertCircle, AlertTriangle, Bell, CheckCheck, Info } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import EmptyState from '@/components/EmptyState';
+import ErrorState from '@/components/ErrorState';
 import { cn } from '@/lib/utils';
 import {
   getUnreadCount,
@@ -133,27 +136,21 @@ export default function NotificationPage() {
         </Button>
       </div>
 
-      {isError && (
-        <p className="rounded-card border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Gagal memuat notifikasi. Silakan muat ulang halaman.
-        </p>
-      )}
+      {isError && <ErrorState message="Gagal memuat notifikasi. Silakan muat ulang halaman." />}
 
       {isLoading && (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-16 animate-pulse rounded-card bg-slate-100" />
+            <Skeleton key={i} className="h-16 rounded-card" />
           ))}
         </div>
       )}
 
       {!isLoading && !isError && items.length === 0 && (
-        <div className="flex flex-col items-center gap-2 rounded-card border border-dashed border-slate-300 py-16 text-center">
-          <Bell className="h-10 w-10 text-slate-300" />
-          <p className="font-medium text-slate-600">
-            {isUnreadFilter ? 'Tidak ada notifikasi belum dibaca' : 'Belum ada notifikasi'}
-          </p>
-        </div>
+        <EmptyState
+          icon={Bell}
+          title={isUnreadFilter ? 'Tidak ada notifikasi belum dibaca' : 'Belum ada notifikasi'}
+        />
       )}
 
       <div className="space-y-2">
@@ -167,7 +164,7 @@ export default function NotificationPage() {
               type="button"
               onClick={() => handleItemClick(item)}
               className={cn(
-                'flex w-full items-start gap-3 rounded-card p-4 text-left shadow-sm transition-opacity duration-300',
+                'flex w-full items-start gap-3 rounded-card p-4 text-left shadow-card transition-smooth',
                 SEVERITY_CARD_CLASSES[severity],
                 isPending && 'opacity-40',
                 item.is_read && 'opacity-70',

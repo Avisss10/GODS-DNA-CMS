@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
+import gwLogoSlate from '@/assets/brand/gw-logo-slate.png';
 
 interface MenuItemDef {
   label: string;
@@ -64,13 +65,12 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onRequestLogout }: 
 
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-sidebar transition-transform duration-200 sm:static sm:z-auto sm:w-16 sm:translate-x-0 lg:w-64 print:hidden',
+          'fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-sidebar-gradient shadow-sidebar transition-transform duration-200 sm:static sm:z-auto sm:w-16 sm:translate-x-0 lg:w-64 print:hidden',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
         <div className="flex h-16 shrink-0 items-center px-4">
-          {/* TODO: ganti dengan file logo resmi */}
-          <span className="truncate text-lg font-bold text-slate-800 sm:hidden lg:inline">GODS DNA</span>
+          <img src={gwLogoSlate} alt="GOD'S DNA Grand Wisata" className="h-6 w-auto sm:hidden lg:block" />
           <span className="hidden text-lg font-bold text-slate-800 sm:inline lg:hidden">GD</span>
         </div>
 
@@ -85,16 +85,21 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onRequestLogout }: 
                     aria-label={item.label}
                     className={({ isActive }) =>
                       cn(
-                        'flex items-center gap-3 rounded-card px-2.5 py-2 text-sm font-medium transition-colors',
-                        isActive ? 'bg-gradient-to-r from-accent-from to-accent-to text-white' : 'text-slate-700 hover:bg-black/5',
+                        'relative flex items-center gap-3 rounded-card px-2.5 py-2 text-sm font-medium transition-smooth',
+                        isActive
+                          ? 'bg-gradient-to-r from-accent-from to-accent-to text-white shadow-soft'
+                          : 'text-slate-700 hover:bg-black/5',
                       )
                     }
                   >
                     {({ isActive }) => (
                       <>
+                        {isActive && (
+                          <span className="absolute -left-3 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-accent-from sm:hidden lg:block" />
+                        )}
                         <span
                           className={cn(
-                            'flex h-8 w-8 shrink-0 items-center justify-center rounded-card',
+                            'flex h-8 w-8 shrink-0 items-center justify-center rounded-card transition-smooth',
                             isActive ? 'bg-white/20' : item.chipClass,
                           )}
                         >
@@ -120,7 +125,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onRequestLogout }: 
               onCloseMobile();
               onRequestLogout();
             }}
-            className="flex w-full items-center gap-3 rounded-card px-2.5 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-black/5"
+            className="flex w-full items-center gap-3 rounded-card px-2.5 py-2 text-sm font-medium text-slate-700 transition-smooth hover:bg-black/5"
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-card bg-red-100">
               <LogOut className="h-4 w-4 text-red-600" />

@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import EmptyState from '@/components/EmptyState';
+import ErrorState from '@/components/ErrorState';
 import {
   Dialog,
   DialogContent,
@@ -119,7 +121,7 @@ export default function MeetingDetailPage() {
   }
 
   if (!Number.isFinite(meetingId)) {
-    return <p className="text-sm text-destructive">ID meeting tidak valid.</p>;
+    return <ErrorState message="ID meeting tidak valid." />;
   }
 
   if (meetingQuery.isLoading) {
@@ -133,12 +135,14 @@ export default function MeetingDetailPage() {
 
   if (meetingQuery.isError || !meetingQuery.data) {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-destructive">Gagal memuat data meeting, atau meeting tidak ditemukan.</p>
-        <Button variant="outline" onClick={() => navigate('/cellgroup')}>
-          <ArrowLeft className="h-4 w-4" /> Kembali
-        </Button>
-      </div>
+      <ErrorState
+        message="Gagal memuat data meeting, atau meeting tidak ditemukan."
+        action={
+          <Button variant="outline" size="sm" onClick={() => navigate('/cellgroup')}>
+            <ArrowLeft className="h-4 w-4" /> Kembali
+          </Button>
+        }
+      />
     );
   }
 
@@ -226,15 +230,13 @@ export default function MeetingDetailPage() {
           {photosQuery.isLoading && (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="aspect-square animate-pulse rounded-card bg-slate-100" />
+                <Skeleton key={i} className="aspect-square rounded-card" />
               ))}
             </div>
           )}
 
           {!photosQuery.isLoading && photoCount === 0 && (
-            <p className="rounded-card border border-dashed border-slate-300 py-8 text-center text-sm text-slate-500">
-              Belum ada foto dokumentasi
-            </p>
+            <EmptyState icon={ImagePlus} title="Belum ada foto dokumentasi" className="py-8" />
           )}
 
           {!photosQuery.isLoading && photoCount > 0 && (
@@ -282,7 +284,7 @@ export default function MeetingDetailPage() {
 
       {lightboxUrl && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-sm"
           onClick={() => setLightboxUrl(null)}
         >
           <button className="absolute right-4 top-4 text-white" onClick={() => setLightboxUrl(null)} aria-label="Tutup">

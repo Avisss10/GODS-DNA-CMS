@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import type { AuditLogItem } from '../auditlog.api';
 
@@ -101,30 +102,28 @@ export default function AuditLogDiffModal({ item, onOpenChange }: AuditLogDiffMo
             {rows.length === 0 ? (
               <p className="text-sm text-slate-500">Tidak ada detail data_sebelum/data_sesudah untuk baris ini.</p>
             ) : (
-              <div className="overflow-x-auto rounded-card border border-slate-200">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">Field</th>
-                      <th className="px-3 py-2 font-medium">Sebelum</th>
-                      <th className="px-3 py-2 font-medium">Sesudah</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {rows.map((row) => (
-                      <tr key={row.key} className={cn(ROW_CLASSES[row.kind])}>
-                        <td className="whitespace-nowrap px-3 py-2 font-mono text-slate-700">{row.key}</td>
-                        <td className={cn('max-w-xs whitespace-pre-wrap break-words px-3 py-2', CELL_HIGHLIGHT[row.kind])}>
-                          {formatValue(row.beforeVal, row.hasBefore)}
-                        </td>
-                        <td className={cn('max-w-xs whitespace-pre-wrap break-words px-3 py-2', CELL_HIGHLIGHT[row.kind])}>
-                          {formatValue(row.afterVal, row.hasAfter)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow className="text-xs hover:bg-transparent">
+                    <TableHead className="py-2">Field</TableHead>
+                    <TableHead className="py-2">Sebelum</TableHead>
+                    <TableHead className="py-2">Sesudah</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((row) => (
+                    <TableRow key={row.key} className={cn('text-xs', ROW_CLASSES[row.kind])}>
+                      <TableCell className="whitespace-nowrap py-2 font-mono text-slate-700">{row.key}</TableCell>
+                      <TableCell className={cn('max-w-xs whitespace-pre-wrap break-words py-2', CELL_HIGHLIGHT[row.kind])}>
+                        {formatValue(row.beforeVal, row.hasBefore)}
+                      </TableCell>
+                      <TableCell className={cn('max-w-xs whitespace-pre-wrap break-words py-2', CELL_HIGHLIGHT[row.kind])}>
+                        {formatValue(row.afterVal, row.hasAfter)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
           </div>
         )}

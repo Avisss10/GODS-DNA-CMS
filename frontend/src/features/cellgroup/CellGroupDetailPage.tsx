@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import ErrorState from '@/components/ErrorState';
 import PulsingDot from '@/components/PulsingDot';
 import { getJemaatById } from '@/features/jemaat/jemaat.api';
 import {
@@ -106,7 +107,7 @@ export default function CellGroupDetailPage() {
   }
 
   if (!Number.isFinite(id)) {
-    return <p className="text-sm text-destructive">ID Cell Group tidak valid.</p>;
+    return <ErrorState message="ID Cell Group tidak valid." />;
   }
 
   if (cgQuery.isLoading) {
@@ -121,14 +122,14 @@ export default function CellGroupDetailPage() {
 
   if (cgQuery.isError || !cg) {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-destructive">
-          Gagal memuat data Cell Group, atau Cell Group tidak ditemukan/sudah nonaktif.
-        </p>
-        <Button variant="outline" onClick={() => navigate('/cellgroup')}>
-          <ArrowLeft className="h-4 w-4" /> Kembali ke daftar
-        </Button>
-      </div>
+      <ErrorState
+        message="Gagal memuat data Cell Group, atau Cell Group tidak ditemukan/sudah nonaktif."
+        action={
+          <Button variant="outline" size="sm" onClick={() => navigate('/cellgroup')}>
+            <ArrowLeft className="h-4 w-4" /> Kembali ke daftar
+          </Button>
+        }
+      />
     );
   }
 
@@ -199,10 +200,10 @@ export default function CellGroupDetailPage() {
         </CardContent>
       </Card>
 
-      <div className="rounded-card border border-slate-200">
+      <div className="rounded-xl border border-slate-200/70 bg-card shadow-card">
         <div className="flex border-b border-slate-100">
           <button
-            className={`px-4 py-3 text-sm font-medium ${
+            className={`px-4 py-3 text-sm font-medium transition-smooth ${
               tab === 'anggota' ? 'border-b-2 border-modul-cellgroup text-modul-cellgroupText' : 'text-slate-500'
             }`}
             onClick={() => setTab('anggota')}
@@ -210,7 +211,7 @@ export default function CellGroupDetailPage() {
             Anggota
           </button>
           <button
-            className={`px-4 py-3 text-sm font-medium ${
+            className={`px-4 py-3 text-sm font-medium transition-smooth ${
               tab === 'meeting' ? 'border-b-2 border-modul-cellgroup text-modul-cellgroupText' : 'text-slate-500'
             }`}
             onClick={() => setTab('meeting')}

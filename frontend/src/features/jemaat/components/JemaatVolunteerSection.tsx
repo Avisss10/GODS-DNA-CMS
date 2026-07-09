@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import { HandHeart, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import EmptyState from '@/components/EmptyState';
 import { listVolunteerByJemaat } from '@/features/volunteer/volunteer.api';
 import { listVolunteerTypes, unregisterVolunteer } from '@/features/volunteer/volunteer.api';
 import type { JemaatVolunteerHistory } from '@/types/volunteer.types';
@@ -77,16 +79,13 @@ export default function JemaatVolunteerSection({ jemaatId }: JemaatVolunteerSect
       {isLoading && (
         <div className="space-y-2">
           {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="h-12 animate-pulse rounded-card bg-slate-100" />
+            <Skeleton key={i} className="h-12 rounded-card" />
           ))}
         </div>
       )}
 
       {isEmpty && (
-        <div className="flex flex-col items-center gap-2 rounded-card border border-dashed border-slate-300 py-10 text-center">
-          <HandHeart className="h-8 w-8 text-slate-300" />
-          <p className="text-sm text-slate-500">Belum terdaftar di jenis volunteer manapun</p>
-        </div>
+        <EmptyState icon={HandHeart} title="Belum terdaftar di jenis volunteer manapun" className="py-10" />
       )}
 
       {!isLoading && !isEmpty && (

@@ -56,6 +56,40 @@
     @apply border-border;
   }
   body {
-    @apply bg-surface font-sans text-slate-800;
+    @apply bg-surface font-sans text-slate-800 antialiased;
+  }
+  ::selection {
+    @apply bg-accent-from/25 text-slate-900;
+  }
+
+  /* Scrollbar custom tipis — Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(100 116 139 / 0.35) transparent;
+  }
+  /* Scrollbar custom tipis — WebKit/Chromium */
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: rgb(100 116 139 / 0.35);
+    border-radius: 20px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(100 116 139 / 0.5);
+  }
+}
+
+@layer utilities {
+  .transition-smooth {
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 175ms;
   }
 }

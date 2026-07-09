@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import ErrorState from '@/components/ErrorState';
 import { getEventById, updateEventStatus } from './event.api';
 import { formatEventDate, getEventStatusVariant, getValidNextStatuses } from './event.utils';
 import type { EventStatus } from '@/types/event.types';
@@ -57,7 +58,7 @@ export default function EventDetailPage() {
   }
 
   if (!Number.isFinite(id)) {
-    return <p className="text-sm text-destructive">ID Event tidak valid.</p>;
+    return <ErrorState message="ID Event tidak valid." />;
   }
 
   if (eventQuery.isLoading) {
@@ -72,12 +73,14 @@ export default function EventDetailPage() {
 
   if (eventQuery.isError || !event) {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-destructive">Gagal memuat data Event, atau Event tidak ditemukan.</p>
-        <Button variant="outline" onClick={() => navigate('/event')}>
-          <ArrowLeft className="h-4 w-4" /> Kembali ke daftar
-        </Button>
-      </div>
+      <ErrorState
+        message="Gagal memuat data Event, atau Event tidak ditemukan."
+        action={
+          <Button variant="outline" size="sm" onClick={() => navigate('/event')}>
+            <ArrowLeft className="h-4 w-4" /> Kembali ke daftar
+          </Button>
+        }
+      />
     );
   }
 

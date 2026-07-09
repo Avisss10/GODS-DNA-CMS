@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ClipboardList, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import EmptyState from '@/components/EmptyState';
 import { getVolunteerNeeds } from '../event.api';
 import { VOLUNTEER_MUTABLE_STATUSES } from '@/types/event.types';
 import type { EventStatus } from '@/types/event.types';
@@ -44,16 +46,13 @@ export default function VolunteerNeedsSection({ eventId, eventStatus }: Voluntee
       {needsQuery.isLoading && (
         <div className="space-y-2">
           {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="h-12 animate-pulse rounded-card bg-slate-100" />
+            <Skeleton key={i} className="h-12 rounded-card" />
           ))}
         </div>
       )}
 
       {!needsQuery.isLoading && needs.length === 0 && (
-        <div className="flex flex-col items-center gap-2 rounded-card border border-dashed border-slate-300 py-8 text-center">
-          <ClipboardList className="h-7 w-7 text-slate-300" />
-          <p className="text-sm text-slate-500">Belum ada kuota yang diset — penugasan bebas tanpa batas.</p>
-        </div>
+        <EmptyState icon={ClipboardList} title="Belum ada kuota yang diset — penugasan bebas tanpa batas." className="py-8" />
       )}
 
       {!needsQuery.isLoading && needs.length > 0 && (

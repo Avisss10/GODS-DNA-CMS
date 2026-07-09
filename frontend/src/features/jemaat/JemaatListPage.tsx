@@ -5,6 +5,17 @@ import { isAxiosError } from 'axios';
 import { Loader2, Plus, Search, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableCheckboxCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableSkeletonRows,
+} from '@/components/ui/table';
 import PrintButton from '@/components/PrintButton';
 import Breadcrumb from '@/components/Breadcrumb';
 import BulkActionToolbar from '@/components/BulkActionToolbar';
@@ -242,69 +253,60 @@ export default function JemaatListPage() {
       {!hasNoJemaatAtAll && !hasNoFilterResult && (
         <>
           {/* Desktop table (>=640px, dan SELALU tampil saat print) */}
-          <div className="hidden overflow-x-auto rounded-card border border-slate-200 sm:block print:block">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="w-10 px-4 py-3 print:hidden">
+          <div className="hidden sm:block print:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableCheckboxCell as="th" className="print:hidden">
                     <input
                       type="checkbox"
                       checked={paginated.length > 0 && paginated.every((j) => selectedIds.has(j.id))}
                       onChange={toggleSelectAllOnPage}
                       aria-label="Pilih semua di halaman ini"
                     />
-                  </th>
-                  <th className="px-4 py-3">Nama</th>
-                  <th className="px-4 py-3">Tanggal Bergabung</th>
-                  <th className="px-4 py-3">Skor Keaktifan</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right print:hidden">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {isLoading &&
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={i}>
-                      <td colSpan={6} className="px-4 py-3">
-                        <div className="h-5 w-full animate-pulse rounded bg-slate-100" />
-                      </td>
-                    </tr>
-                  ))}
+                  </TableCheckboxCell>
+                  <TableHead>Nama</TableHead>
+                  <TableHead>Tanggal Bergabung</TableHead>
+                  <TableHead>Skor Keaktifan</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right print:hidden">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading && <TableSkeletonRows rows={5} columns={6} />}
 
                 {!isLoading &&
                   paginated.map((j) => (
-                    <tr key={j.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 print:hidden">
+                    <TableRow key={j.id} selected={selectedIds.has(j.id)}>
+                      <TableCheckboxCell className="print:hidden">
                         <input
                           type="checkbox"
                           checked={selectedIds.has(j.id)}
                           onChange={() => toggleSelect(j.id)}
                           aria-label={`Pilih ${j.nama}`}
                         />
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-800">{j.nama}</td>
-                      <td className="px-4 py-3 text-slate-600">{formatTanggal(j.tgl_bergabung)}</td>
-                      <td className="px-4 py-3 text-slate-600">{j.skor_keaktifan ?? '-'}</td>
-                      <td className="px-4 py-3">
+                      </TableCheckboxCell>
+                      <TableCell className="font-medium text-slate-800">{j.nama}</TableCell>
+                      <TableCell className="text-slate-600">{formatTanggal(j.tgl_bergabung)}</TableCell>
+                      <TableCell className="text-slate-600">{j.skor_keaktifan ?? '-'}</TableCell>
+                      <TableCell>
                         <StatusKeaktifanBadge status={j.status_keaktifan} />
-                      </td>
-                      <td className="px-4 py-3 text-right print:hidden">
+                      </TableCell>
+                      <TableCell className="text-right print:hidden">
                         <Link to={`/jemaat/${j.id}`} className="text-sm font-medium text-accent-from hover:underline">
                           Lihat detail
                         </Link>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
 
           {/* Mobile card-list (<640px, disembunyikan saat print supaya tidak dobel dgn tabel) */}
           <div className="space-y-3 sm:hidden print:hidden">
             {isLoading &&
-              Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-28 animate-pulse rounded-card bg-slate-100" />
-              ))}
+              Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-card" />)}
 
             {!isLoading &&
               paginated.map((j) => (

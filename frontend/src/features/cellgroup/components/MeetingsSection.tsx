@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 import { CalendarClock, ImageIcon, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import EmptyState from '@/components/EmptyState';
 import { listMeetings } from '../cellgroup.api';
 import MeetingFormModal from './MeetingFormModal';
 
@@ -54,15 +56,13 @@ export default function MeetingsSection({ cgId, hasActiveLeader }: MeetingsSecti
       {meetingsQuery.isLoading && (
         <div className="space-y-2">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-16 animate-pulse rounded-card bg-slate-100" />
+            <Skeleton key={i} className="h-16 rounded-card" />
           ))}
         </div>
       )}
 
       {!meetingsQuery.isLoading && (meetingsQuery.data?.length ?? 0) === 0 && (
-        <p className="rounded-card border border-dashed border-slate-300 py-8 text-center text-sm text-slate-500">
-          Belum ada meeting tercatat
-        </p>
+        <EmptyState icon={CalendarClock} title="Belum ada meeting tercatat" className="py-8" />
       )}
 
       {!meetingsQuery.isLoading && (meetingsQuery.data?.length ?? 0) > 0 && (

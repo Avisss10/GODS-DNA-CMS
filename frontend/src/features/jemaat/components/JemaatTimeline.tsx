@@ -1,4 +1,6 @@
-import { CalendarDays, HandHeart, Users } from 'lucide-react';
+import { CalendarDays, HandHeart, History, Users } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import EmptyState from '@/components/EmptyState';
 import { cn } from '@/lib/utils';
 
 export interface TimelineEntry {
@@ -31,14 +33,14 @@ export default function JemaatTimeline({ entries, isLoading }: JemaatTimelinePro
     return (
       <div className="space-y-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-14 animate-pulse rounded-card bg-slate-100" />
+          <Skeleton key={i} className="h-14 rounded-card" />
         ))}
       </div>
     );
   }
 
   if (entries.length === 0) {
-    return <p className="py-6 text-center text-sm text-slate-500">Belum ada aktivitas tercatat</p>;
+    return <EmptyState icon={History} title="Belum ada aktivitas tercatat" className="border-none py-6" />;
   }
 
   return (

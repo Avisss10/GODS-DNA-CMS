@@ -4,6 +4,7 @@ import { toast } from '@/lib/toast';
 import { ClipboardCheck, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import { getKehadiran, submitKehadiran } from '../event.api';
 import type { EventStatus } from '@/types/event.types';
 
@@ -58,7 +59,7 @@ export default function KehadiranSection({ eventId, eventStatus }: KehadiranSect
   }
 
   if (kehadiranQuery.isLoading) {
-    return <div className="h-20 animate-pulse rounded-card bg-slate-100" />;
+    return <Skeleton className="h-20 rounded-card" />;
   }
 
   const data = kehadiranQuery.data;

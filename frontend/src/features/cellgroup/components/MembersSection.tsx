@@ -2,8 +2,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { toast } from '@/lib/toast';
-import { Loader2, Plus, UserMinus } from 'lucide-react';
+import { Loader2, Plus, UserMinus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import EmptyState from '@/components/EmptyState';
 import {
   Dialog,
   DialogContent,
@@ -109,15 +111,13 @@ export default function MembersSection({ cgId, onMembersChanged }: MembersSectio
       {membersQuery.isLoading && (
         <div className="space-y-2">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-12 animate-pulse rounded-card bg-slate-100" />
+            <Skeleton key={i} className="h-12 rounded-card" />
           ))}
         </div>
       )}
 
       {!membersQuery.isLoading && (membersQuery.data?.length ?? 0) === 0 && (
-        <p className="rounded-card border border-dashed border-slate-300 py-8 text-center text-sm text-slate-500">
-          Belum ada anggota di Cell Group ini
-        </p>
+        <EmptyState icon={Users} title="Belum ada anggota di Cell Group ini" className="py-8" />
       )}
 
       {!membersQuery.isLoading && (membersQuery.data?.length ?? 0) > 0 && (

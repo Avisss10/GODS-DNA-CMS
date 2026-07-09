@@ -5,11 +5,14 @@ import { CalendarDays, List, Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import PrintButton from '@/components/PrintButton';
 import Breadcrumb from '@/components/Breadcrumb';
 import BulkActionToolbar from '@/components/BulkActionToolbar';
 import BulkActionSummaryDialog from '@/components/BulkActionSummaryDialog';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import EmptyState from '@/components/EmptyState';
+import ErrorState from '@/components/ErrorState';
 import SavedFiltersBar from '@/components/SavedFiltersBar';
 import { useBulkAction, type BulkActionResult } from '@/hooks/useBulkAction';
 import { useSavedFilters } from '@/hooks/useSavedFilters';
@@ -156,7 +159,7 @@ async function handleConfirmBulkArchive() {
             type="button"
             onClick={() => setView('list')}
             className={cn(
-              'flex items-center gap-1.5 rounded-[6px] px-3 py-1.5 text-sm font-medium',
+              'flex items-center gap-1.5 rounded-[6px] px-3 py-1.5 text-sm font-medium transition-smooth',
               view === 'list' ? 'bg-modul-event text-white' : 'text-slate-500 hover:bg-slate-50',
             )}
           >
@@ -166,7 +169,7 @@ async function handleConfirmBulkArchive() {
             type="button"
             onClick={() => setView('kalender')}
             className={cn(
-              'flex items-center gap-1.5 rounded-[6px] px-3 py-1.5 text-sm font-medium',
+              'flex items-center gap-1.5 rounded-[6px] px-3 py-1.5 text-sm font-medium transition-smooth',
               view === 'kalender' ? 'bg-modul-event text-white' : 'text-slate-500 hover:bg-slate-50',
             )}
           >
@@ -257,29 +260,27 @@ async function handleConfirmBulkArchive() {
         onClear={() => setSelectedIds(new Set())}
       />
 
-      {isError && (
-        <p className="rounded-card border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Gagal memuat data Event. Silakan muat ulang halaman.
-        </p>
-      )}
+      {isError && <ErrorState message="Gagal memuat data Event. Silakan muat ulang halaman." />}
 
       {isLoading && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-32 animate-pulse rounded-card bg-slate-100" />
+            <Skeleton key={i} className="h-32 rounded-xl" />
           ))}
         </div>
       )}
 
       {isEmpty && (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-slate-300 py-16 text-center">
-          <CalendarDays className="h-10 w-10 text-slate-300" />
-          <p className="font-medium text-slate-600">Belum ada Event</p>
-          <Button onClick={() => setFormOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Buat Event
-          </Button>
-        </div>
+        <EmptyState
+          icon={CalendarDays}
+          title="Belum ada Event"
+          action={
+            <Button onClick={() => setFormOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Buat Event
+            </Button>
+          }
+        />
       )}
 
       {!isLoading && !isEmpty && view === 'kalender' && <EventCalendar events={data ?? []} />}
@@ -287,9 +288,7 @@ async function handleConfirmBulkArchive() {
       {!isLoading && !isEmpty && view === 'list' && (
         <>
           {filtered.length === 0 ? (
-            <p className="rounded-card border border-dashed border-slate-300 py-10 text-center text-sm text-slate-500">
-              Tidak ada event yang cocok dengan filter.
-            </p>
+            <EmptyState icon={Search} title="Tidak ada event yang cocok dengan filter" />
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((ev) => {
@@ -299,7 +298,7 @@ async function handleConfirmBulkArchive() {
                   <Link
                     key={ev.id}
                     to={`/event/${ev.id}`}
-                    className="relative block rounded-card border border-slate-200 p-4 transition-shadow hover:shadow-md"
+                    className="relative block rounded-xl border-y border-r border-l-4 border-y-slate-200/70 border-r-slate-200/70 border-l-modul-event bg-card p-4 shadow-card transition-smooth hover:-translate-y-0.5 hover:shadow-card-hover"
                   >
                     <label
                       className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded bg-white/90 shadow print:hidden"

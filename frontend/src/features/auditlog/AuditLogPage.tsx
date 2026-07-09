@@ -3,6 +3,15 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ScrollText, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { listAuditLogs, type AuditLogFilterParams, type AuditLogItem } from './auditlog.api';
 import { AKSI_OPTIONS, MODUL_OPTIONS } from './auditlog.constants';
 import AuditLogDiffModal from './components/AuditLogDiffModal';
@@ -76,7 +85,7 @@ export default function AuditLogPage() {
       {isLoading && (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-10 animate-pulse rounded-card bg-slate-100" />
+            <Skeleton key={i} className="h-10 rounded-card" />
           ))}
         </div>
       )}
@@ -91,43 +100,43 @@ export default function AuditLogPage() {
       {!isLoading && items.length > 0 && (
         <>
           {/* Desktop/tablet */}
-          <div className="hidden overflow-x-auto rounded-card border border-slate-200 sm:block">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 font-medium">ID</th>
-                  <th className="px-4 py-3 font-medium">Modul</th>
-                  <th className="px-4 py-3 font-medium">Aksi</th>
-                  <th className="px-4 py-3 font-medium">Object ID</th>
-                  <th className="px-4 py-3 font-medium">User ID</th>
-                  <th className="px-4 py-3 font-medium">Waktu</th>
-                  <th className="px-4 py-3 font-medium text-center">Integritas</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+          <div className="hidden sm:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>ID</TableHead>
+                  <TableHead>Modul</TableHead>
+                  <TableHead>Aksi</TableHead>
+                  <TableHead>Object ID</TableHead>
+                  <TableHead>User ID</TableHead>
+                  <TableHead>Waktu</TableHead>
+                  <TableHead className="text-center">Integritas</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {items.map((row) => (
-                  <tr
+                  <TableRow
                     key={row.id}
                     onClick={() => setSelectedItem(row)}
-                    className="cursor-pointer transition-colors hover:bg-slate-50"
+                    className="cursor-pointer"
                   >
-                    <td className="px-4 py-3 text-slate-500">{row.id}</td>
-                    <td className="px-4 py-3 font-medium text-slate-800">{row.modul}</td>
-                    <td className="px-4 py-3 text-slate-600">{row.aksi}</td>
-                    <td className="px-4 py-3 text-slate-600">{row.object_id ?? '-'}</td>
-                    <td className="px-4 py-3 text-slate-600">{row.user_id ?? '-'}</td>
-                    <td className="px-4 py-3 text-slate-500">{new Date(row.created_at).toLocaleString('id-ID')}</td>
-                    <td className="px-4 py-3 text-center">
+                    <TableCell className="text-slate-500">{row.id}</TableCell>
+                    <TableCell className="font-medium text-slate-800">{row.modul}</TableCell>
+                    <TableCell className="text-slate-600">{row.aksi}</TableCell>
+                    <TableCell className="text-slate-600">{row.object_id ?? '-'}</TableCell>
+                    <TableCell className="text-slate-600">{row.user_id ?? '-'}</TableCell>
+                    <TableCell className="text-slate-500">{new Date(row.created_at).toLocaleString('id-ID')}</TableCell>
+                    <TableCell className="text-center">
                       {row.hmac_status !== 'OK' && (
                         <span title={`hmac_status: ${row.hmac_status}`}>
                           <AlertTriangle className="mx-auto h-4 w-4 text-red-600" />
                         </span>
                       )}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
 
           {/* Mobile: card-list, tetap bisa diklik untuk buka diff modal */}

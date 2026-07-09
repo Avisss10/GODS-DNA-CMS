@@ -59,6 +59,7 @@ export default function DashboardPage() {
           icon={Users}
           chipClass="bg-modul-jemaat/15"
           iconClass="text-modul-jemaat"
+          accentClass="border-l-modul-jemaat"
           isLoading={jemaatQuery.isLoading}
           isError={jemaatQuery.isError}
         />
@@ -68,6 +69,7 @@ export default function DashboardPage() {
           icon={UsersRound}
           chipClass="bg-modul-cellgroup/15"
           iconClass="text-modul-cellgroup"
+          accentClass="border-l-modul-cellgroup"
           isLoading={cellGroupQuery.isLoading}
           isError={cellGroupQuery.isError}
         />
@@ -77,6 +79,7 @@ export default function DashboardPage() {
           icon={CalendarClock}
           chipClass="bg-modul-event/15"
           iconClass="text-modul-event"
+          accentClass="border-l-modul-event"
           isLoading={eventQuery.isLoading}
           isError={eventQuery.isError}
         />
@@ -86,6 +89,7 @@ export default function DashboardPage() {
           icon={HandHeart}
           chipClass="bg-modul-volunteer/15"
           iconClass="text-modul-volunteer"
+          accentClass="border-l-modul-volunteer"
           isLoading={volunteerTypeQuery.isLoading}
           isError={volunteerTypeQuery.isError}
         />
