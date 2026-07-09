@@ -8,6 +8,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import BulkActionToolbar from '@/components/BulkActionToolbar';
 import BulkActionSummaryDialog from '@/components/BulkActionSummaryDialog';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import PulsingDot from '@/components/PulsingDot';
 import { useBulkAction, type BulkActionResult } from '@/hooks/useBulkAction';
 import { deactivateCellGroup, listCellGroups } from './cellgroup.api';
 import CellGroupFormModal from './components/CellGroupFormModal';
@@ -151,7 +152,10 @@ export default function CellGroupListPage() {
                 )}
                 <div className="flex items-start justify-between gap-2 pl-6">
                   <h3 className="font-semibold text-slate-800">{cg.nama}</h3>
-                  <Badge variant={cg.is_active ? 'default' : 'secondary'}>{cg.is_active ? 'Aktif' : 'Nonaktif'}</Badge>
+                  <Badge variant={cg.is_active ? 'default' : 'secondary'} className="gap-1.5">
+                    {cg.is_active && <PulsingDot colorClass="bg-status-aktif" />}
+                    {cg.is_active ? 'Aktif' : 'Nonaktif'}
+                  </Badge>
                 </div>
                 {cg.deskripsi && <p className="mt-1 line-clamp-2 text-sm text-slate-500">{cg.deskripsi}</p>}
                 <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-sm">

@@ -6,6 +6,7 @@ import { toast } from '@/lib/toast';
 import { KeyRound, Plus, UserCog } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import PulsingDot from '@/components/PulsingDot';
 import { listUsers, updateUserStatus, type ManagedUser } from './user.api';
 import CreateUserModal from './components/CreateUserModal';
 import ResetPasswordModal from './components/ResetPasswordModal';
@@ -120,7 +121,10 @@ export default function UserManagementPage() {
                           label={`Ubah status akun ${u.username}`}
                           onClick={() => setToggleTarget(u)}
                         />
-                        <Badge variant={u.aktif ? 'default' : 'secondary'}>{u.aktif ? 'Aktif' : 'Nonaktif'}</Badge>
+                        <Badge variant={u.aktif ? 'default' : 'secondary'} className="gap-1.5">
+                          {u.aktif && <PulsingDot colorClass="bg-status-aktif" />}
+                          {u.aktif ? 'Aktif' : 'Nonaktif'}
+                        </Badge>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{formatLastLogin(u.last_login_at)}</td>
@@ -151,7 +155,8 @@ export default function UserManagementPage() {
                     <p className="truncate font-medium text-slate-800">{u.username}</p>
                     <Badge variant="secondary" className="mt-1">{u.peran}</Badge>
                   </div>
-                  <Badge variant={u.aktif ? 'default' : 'secondary'} className="shrink-0">
+                  <Badge variant={u.aktif ? 'default' : 'secondary'} className="shrink-0 gap-1.5">
+                    {u.aktif && <PulsingDot colorClass="bg-status-aktif" />}
                     {u.aktif ? 'Aktif' : 'Nonaktif'}
                   </Badge>
                 </div>

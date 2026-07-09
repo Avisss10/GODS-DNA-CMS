@@ -5,6 +5,7 @@ import { toast } from '@/lib/toast';
 import { HandHeart, Pencil, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import PulsingDot from '@/components/PulsingDot';
 import {
   activateVolunteerType,
   deactivateVolunteerType,
@@ -165,7 +166,8 @@ export default function VolunteerTypeListPage() {
                           label={`Ubah status jenis volunteer ${item.nama}`}
                           onClick={() => handleToggleClick(item)}
                         />
-                        <Badge variant={item.is_active ? 'default' : 'secondary'}>
+                        <Badge variant={item.is_active ? 'default' : 'secondary'} className="gap-1.5">
+                          {item.is_active && <PulsingDot colorClass="bg-status-aktif" />}
                           {item.is_active ? 'Aktif' : 'Nonaktif'}
                         </Badge>
                       </div>
@@ -194,7 +196,8 @@ export default function VolunteerTypeListPage() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-medium text-slate-800">{item.nama}</p>
-                  <Badge variant={item.is_active ? 'default' : 'secondary'} className="shrink-0">
+                  <Badge variant={item.is_active ? 'default' : 'secondary'} className="shrink-0 gap-1.5">
+                    {item.is_active && <PulsingDot colorClass="bg-status-aktif" />}
                     {item.is_active ? 'Aktif' : 'Nonaktif'}
                   </Badge>
                 </div>

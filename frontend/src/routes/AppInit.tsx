@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getMe } from '@/features/auth/auth.api';
@@ -22,19 +22,21 @@ export default function AppInit() {
   const clearUser = useAuthStore((s) => s.clearUser);
   const setLoading = useAuthStore((s) => s.setLoading);
 
+  // Pemeriksaan sesi awal harus jalan TEPAT SEKALI, bukan dua kali seperti
+  // yang dipicu StrictMode (mount -> cleanup -> mount ulang) di development —
+  // dua panggilan /auth/me yang tumpang tindih membuat status sempat
+  // bolak-balik 'loading' setelah request pertama selesai, membuka celah
+  // singkat bagi ProtectedRoute untuk sempat merender sebelum status regenerasi.
+  const hasStarted = useRef(false);
+
   useEffect(() => {
-    let active = true;
+    if (hasStarted.current) return;
+    hasStarted.current = true;
+
     setLoading();
     getMe()
-      .then((user) => {
-        if (active) setUser(user);
-      })
-      .catch(() => {
-        if (active) clearUser();
-      });
-    return () => {
-      active = false;
-    };
+      .then((user) => setUser(user))
+      .catch(() => clearUser());
   }, [setLoading, setUser, clearUser]);
 
   if (status === 'idle' || status === 'loading') {

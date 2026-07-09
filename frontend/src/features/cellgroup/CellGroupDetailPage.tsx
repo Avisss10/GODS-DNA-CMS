@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import PulsingDot from '@/components/PulsingDot';
 import { getJemaatById } from '@/features/jemaat/jemaat.api';
 import {
   activateCellGroup,
@@ -147,7 +148,8 @@ export default function CellGroupDetailPage() {
           </Link>
           <div>
             <h1 className="text-xl font-bold text-slate-800">{cg.nama}</h1>
-            <Badge variant={cg.is_active ? 'default' : 'secondary'} className="mt-1">
+            <Badge variant={cg.is_active ? 'default' : 'secondary'} className="mt-1 gap-1.5">
+              {cg.is_active && <PulsingDot colorClass="bg-status-aktif" />}
               {cg.is_active ? 'Aktif' : 'Nonaktif'}
             </Badge>
           </div>

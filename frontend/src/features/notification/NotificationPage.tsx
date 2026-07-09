@@ -25,10 +25,13 @@ const SEVERITY_ICON: Record<NotificationSeverity, typeof AlertTriangle> = {
 
 // Kritis harus jelas beda dari yang biasa: border kiri tebal merah + bg
 // merah muda. Peringatan pakai amber. Info netral (border tipis abu).
+// PENTING: border-y-*/border-r-* dipakai (bukan border-* polos) supaya
+// tailwind-merge (cn()) tidak menganggapnya konflik dengan border-l-{warna}
+// dan diam-diam membuang aksen kiri tebal ini.
 const SEVERITY_CARD_CLASSES: Record<NotificationSeverity, string> = {
-  kritis: 'border-l-4 border-l-red-600 bg-red-50 border-y border-r border-red-200',
-  peringatan: 'border-l-4 border-l-amber-500 bg-amber-50 border-y border-r border-amber-200',
-  info: 'border-l-4 border-l-slate-300 bg-card border-y border-r border-slate-200',
+  kritis: 'border-l-4 border-l-red-600 bg-red-50 border-y border-r border-y-red-200 border-r-red-200',
+  peringatan: 'border-l-4 border-l-amber-500 bg-amber-50 border-y border-r border-y-amber-200 border-r-amber-200',
+  info: 'border-l-4 border-l-slate-300 bg-card border-y border-r border-y-slate-200 border-r-slate-200',
 };
 
 const SEVERITY_ICON_CLASSES: Record<NotificationSeverity, string> = {

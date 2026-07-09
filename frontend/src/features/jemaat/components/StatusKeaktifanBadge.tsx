@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import PulsingDot from '@/components/PulsingDot';
 import type { StatusKeaktifan } from '@/types/jemaat.types';
 import { STATUS_BADGE_CLASSES, STATUS_DOT_CLASSES, STATUS_LABELS } from '../jemaat.constants';
 
@@ -16,17 +17,7 @@ export default function StatusKeaktifanBadge({ status, className }: StatusKeakti
         className,
       )}
     >
-      {status === 'AKTIF' && (
-        <span className="relative flex h-1.5 w-1.5">
-          <span
-            className={cn(
-              'absolute inline-flex h-full w-full animate-ping rounded-full opacity-75',
-              STATUS_DOT_CLASSES[status],
-            )}
-          />
-          <span className={cn('relative inline-flex h-1.5 w-1.5 rounded-full', STATUS_DOT_CLASSES[status])} />
-        </span>
-      )}
+      {status === 'AKTIF' && <PulsingDot colorClass={STATUS_DOT_CLASSES[status]} />}
       {STATUS_LABELS[status]}
     </span>
   );
