@@ -1,8 +1,14 @@
 import * as React from "react"
-import { ArrowDown, ArrowUp, ArrowUpDown, Inbox } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Inbox } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 const Table = React.forwardRef<
   HTMLTableElement,
@@ -81,9 +87,12 @@ const TableHead = React.forwardRef<
   React.ThHTMLAttributes<HTMLTableCellElement> & {
     sortable?: boolean
     sortDirection?: "asc" | "desc" | false
-    onSort?: () => void
+    /** Klik label header → sort ascending (A-Z) langsung. */
+    onSortAsc?: () => void
+    /** Dipakai oleh opsi "Z-A" di dropdown segitiga. */
+    onSortDesc?: () => void
   }
->(({ className, sortable, sortDirection, onSort, children, ...props }, ref) => {
+>(({ className, sortable, sortDirection, onSortAsc, onSortDesc, children, ...props }, ref) => {
   if (!sortable) {
     return (
       <th
@@ -99,17 +108,34 @@ const TableHead = React.forwardRef<
     sortDirection === "asc" ? ArrowUp : sortDirection === "desc" ? ArrowDown : ArrowUpDown
   return (
     <th ref={ref} className={cn("px-4 py-3 font-medium", className)} {...props}>
-      <button
-        type="button"
-        onClick={onSort}
-        className={cn(
-          "inline-flex items-center gap-1 transition-smooth hover:text-slate-700",
-          sortDirection && "text-accent-from"
-        )}
-      >
-        {children}
-        <Icon className={cn("h-3.5 w-3.5", !sortDirection && "opacity-40")} />
-      </button>
+      <span className="inline-flex items-center gap-0.5">
+        <button
+          type="button"
+          onClick={onSortAsc}
+          className={cn(
+            "inline-flex items-center gap-1 transition-smooth hover:text-slate-700",
+            sortDirection && "text-accent-from"
+          )}
+        >
+          {children}
+          <Icon className={cn("h-3.5 w-3.5", !sortDirection && "opacity-40")} />
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Opsi urutan"
+              className="rounded-sm p-0.5 text-slate-400 transition-smooth hover:bg-black/[0.04] hover:text-slate-600"
+            >
+              <ChevronDown className="h-3 w-3" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={onSortAsc}>A - Z</DropdownMenuItem>
+            <DropdownMenuItem onClick={onSortDesc}>Z - A</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </span>
     </th>
   )
 })

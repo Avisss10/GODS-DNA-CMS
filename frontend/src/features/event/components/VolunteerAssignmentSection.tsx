@@ -29,6 +29,7 @@ export default function VolunteerAssignmentSection({ eventId, eventStatus }: Vol
   const queryClient = useQueryClient();
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignPresetJenis, setAssignPresetJenis] = useState<number | undefined>(undefined);
+  const [assignPresetJenisLabel, setAssignPresetJenisLabel] = useState<string | undefined>(undefined);
   const [replaceTarget, setReplaceTarget] = useState<EventVolunteer | null>(null);
   const [cancelTarget, setCancelTarget] = useState<EventVolunteer | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -75,8 +76,9 @@ export default function VolunteerAssignmentSection({ eventId, eventStatus }: Vol
     queryClient.invalidateQueries({ queryKey: ['event', eventId, 'volunteer-needs'] });
   }
 
-  function openAssign(jenisId?: number) {
+  function openAssign(jenisId?: number, jenisLabel?: string) {
     setAssignPresetJenis(jenisId);
+    setAssignPresetJenisLabel(jenisLabel);
     setAssignOpen(true);
   }
 
@@ -101,7 +103,7 @@ export default function VolunteerAssignmentSection({ eventId, eventStatus }: Vol
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-500">Penugasan volunteer aktif, dikelompokkan per jenis pelayanan.</p>
-        <Button size="sm" onClick={() => openAssign(undefined)} disabled={!canMutate || activeJenisOptions.length === 0}>
+        <Button size="sm" onClick={() => openAssign(undefined, undefined)} disabled={!canMutate || activeJenisOptions.length === 0}>
           <Plus className="h-3.5 w-3.5" />
           Tugaskan
         </Button>
@@ -120,7 +122,11 @@ export default function VolunteerAssignmentSection({ eventId, eventStatus }: Vol
       )}
 
       {!isLoading &&
-        groups.map((g) => (
+        groups.map((g) => {
+          // Jenis yang sudah dinonaktifkan tetap tampil (histori penugasan
+          // lama), tapi tidak boleh ditambah assignment baru lagi.
+          const isJenisActive = activeJenisOptions.some((o) => o.id === g.jenisId);
+          return (
           <div key={g.jenisId} className="rounded-card border border-slate-200">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
               <div>
@@ -129,9 +135,11 @@ export default function VolunteerAssignmentSection({ eventId, eventStatus }: Vol
                   {g.assignments.length} bertugas{g.kuota !== null ? ` dari kuota ${g.kuota}` : ' (tanpa batas)'}
                 </p>
               </div>
-              <Button size="sm" variant="outline" onClick={() => openAssign(g.jenisId)} disabled={!canMutate}>
-                <Plus className="h-3.5 w-3.5" /> Tugaskan
-              </Button>
+              {isJenisActive && (
+                <Button size="sm" variant="outline" onClick={() => openAssign(g.jenisId, g.namaJenis)} disabled={!canMutate}>
+                  <Plus className="h-3.5 w-3.5" /> Tugaskan
+                </Button>
+              )}
             </div>
             {g.assignments.length === 0 ? (
               <p className="px-4 py-3 text-sm text-slate-400">Belum ada yang ditugaskan pada jenis ini.</p>
@@ -153,7 +161,8 @@ export default function VolunteerAssignmentSection({ eventId, eventStatus }: Vol
               </ul>
             )}
           </div>
-        ))}
+          );
+        })}
 
       {!canMutate && (
         <p className="text-xs text-slate-400">
@@ -166,6 +175,7 @@ export default function VolunteerAssignmentSection({ eventId, eventStatus }: Vol
         eventId={eventId}
         jenisOptions={activeJenisOptions}
         defaultJenisId={assignPresetJenis}
+        defaultJenisLabel={assignPresetJenisLabel}
         onOpenChange={setAssignOpen}
         onSuccess={refresh}
       />

@@ -2,7 +2,9 @@ const { getPool } = require('../../config/database');
 const { decryptOptional } = require('../../utils/encryption.util');
 
 /**
- * Ambil semua jemaat aktif beserta skor untuk laporan.
+ * Ambil semua jemaat aktif beserta skor untuk laporan. Kalau `ids`
+ * diisi, hasil difilter ke jemaat tersebut saja (dipakai export
+ * baris-terpilih dari checkbox di JemaatListPage/JemaatDetailPage).
  * Field identitas (nama, tgl_lahir, jenis_kelamin) tersimpan sebagai
  * ciphertext (migration 005) dan didekripsi otomatis di sini.
  * Data sensitif (no_hp, alamat, media_sosial) tetap dikembalikan
@@ -11,11 +13,18 @@ const { decryptOptional } = require('../../utils/encryption.util');
  * Catatan: ORDER BY id (bukan nama) karena kolom nama kini ciphertext
  * — urutan alfabetis SQL tidak bermakna lagi, sementara sorting di
  * aplikasi tidak konsisten dengan pagination per-batch (streaming).
- * @param {{ limit?, offset? }} options
+ * @param {{ limit?, offset?, ids?: number[] }} options
  * @returns {Promise<Array<object>>}
  */
-async function getJemaatReport({ limit = 500, offset = 0 } = {}) {
+async function getJemaatReport({ limit = 500, offset = 0, ids } = {}) {
   const pool = getPool();
+  const params = { limit, offset };
+  let where = 'WHERE is_active = TRUE AND deleted_at IS NULL';
+  if (ids && ids.length > 0) {
+    where += ' AND id IN (:ids)';
+    params.ids = ids;
+  }
+
   const [rows] = await pool.query(
     `SELECT id, nama, nama_iv, tgl_lahir, tgl_lahir_iv,
             jenis_kelamin, jenis_kelamin_iv,
@@ -23,10 +32,10 @@ async function getJemaatReport({ limit = 500, offset = 0 } = {}) {
             tgl_bergabung, is_active, is_new_member,
             skor_keaktifan, status_keaktifan, created_at
      FROM jemaat
-     WHERE is_active = TRUE AND deleted_at IS NULL
+     ${where}
      ORDER BY id ASC
      LIMIT :limit OFFSET :offset`,
-    { limit, offset }
+    params
   );
   return rows.map(({ nama_iv, tgl_lahir_iv, jenis_kelamin_iv, ...row }) => ({
     ...row,
@@ -37,15 +46,77 @@ async function getJemaatReport({ limit = 500, offset = 0 } = {}) {
 }
 
 /**
- * Hitung total jemaat aktif untuk paginasi.
+ * Hitung total jemaat aktif (opsional difilter ke `ids`) untuk paginasi.
+ * @param {{ ids?: number[] }} options
  * @returns {Promise<number>}
  */
-async function countJemaat() {
+async function countJemaat({ ids } = {}) {
   const pool = getPool();
-  const [rows] = await pool.query(
-    'SELECT COUNT(*) AS total FROM jemaat WHERE is_active = TRUE AND deleted_at IS NULL'
-  );
+  const params = {};
+  let where = 'WHERE is_active = TRUE AND deleted_at IS NULL';
+  if (ids && ids.length > 0) {
+    where += ' AND id IN (:ids)';
+    params.ids = ids;
+  }
+  const [rows] = await pool.query(`SELECT COUNT(*) AS total FROM jemaat ${where}`, params);
   return Number(rows[0].total);
+}
+
+/**
+ * Ringkasan Cell Group aktif per jemaat (dipakai mode export "detail"),
+ * digabung jadi satu string per jemaat karena output tabular xlsx/pdf
+ * perlu 1 baris = 1 jemaat.
+ * @param {number[]} ids
+ * @returns {Promise<Record<number, string>>} map jemaat_id -> "CG A, CG B"
+ */
+async function getJemaatCgSummary(ids) {
+  if (!ids || ids.length === 0) return {};
+  const pool = getPool();
+  const connection = await pool.getConnection();
+  try {
+    // group_concat_max_len default MySQL/TiDB (1024 byte) bisa memotong
+    // ringkasan diam-diam kalau seorang jemaat aktif di banyak CG —
+    // naikkan per-connection sebelum query GROUP_CONCAT.
+    await connection.query('SET SESSION group_concat_max_len = 1000000');
+    const [rows] = await connection.query(
+      `SELECT cgm.jemaat_id, GROUP_CONCAT(cg.nama ORDER BY cg.nama SEPARATOR ', ') AS cg_names
+       FROM cell_group_members cgm
+       JOIN cell_group cg ON cgm.cg_id = cg.id
+       WHERE cgm.jemaat_id IN (:ids) AND cgm.left_at IS NULL
+       GROUP BY cgm.jemaat_id`,
+      { ids }
+    );
+    return Object.fromEntries(rows.map((r) => [r.jemaat_id, r.cg_names]));
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Ringkasan jenis volunteer aktif per jemaat (dipakai mode export
+ * "detail"), digabung jadi satu string per jemaat.
+ * @param {number[]} ids
+ * @returns {Promise<Record<number, string>>} map jemaat_id -> "Usher, Singer"
+ */
+async function getJemaatVolunteerSummary(ids) {
+  if (!ids || ids.length === 0) return {};
+  const pool = getPool();
+  const connection = await pool.getConnection();
+  try {
+    // Lihat catatan di getJemaatCgSummary soal group_concat_max_len.
+    await connection.query('SET SESSION group_concat_max_len = 1000000');
+    const [rows] = await connection.query(
+      `SELECT vm.jemaat_id, GROUP_CONCAT(vj.nama ORDER BY vj.nama SEPARATOR ', ') AS volunteer_names
+       FROM volunteer_members vm
+       JOIN volunteer_jenis vj ON vm.volunteer_type_id = vj.id
+       WHERE vm.jemaat_id IN (:ids) AND vm.is_active = TRUE
+       GROUP BY vm.jemaat_id`,
+      { ids }
+    );
+    return Object.fromEntries(rows.map((r) => [r.jemaat_id, r.volunteer_names]));
+  } finally {
+    connection.release();
+  }
 }
 
 /**
@@ -181,6 +252,8 @@ async function getAnalyticsReport({ bulan = 12 } = {}) {
 module.exports = {
   getJemaatReport,
   countJemaat,
+  getJemaatCgSummary,
+  getJemaatVolunteerSummary,
   getEventKehadiranReport,
   getCGKehadiranReport,
   getVolunteerReport,

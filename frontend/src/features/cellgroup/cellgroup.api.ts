@@ -2,6 +2,7 @@ import { api } from '@/api/client';
 import type {
   ActiveMemberAtMeeting,
   AbsensiEntry,
+  AbsensiRecord,
   CellGroupDetail,
   CellGroupListItem,
   CellGroupMember,
@@ -98,14 +99,18 @@ export async function updateMeeting(meetingId: number, input: UpdateMeetingInput
 
 // --- Foto meeting ---
 
-export async function uploadMeetingPhoto(
+// Batch upload — foto & absensi sama-sama "sekali setelah meeting
+// selesai" (dikonfirmasi user): mengirim semua file (sampai 5) dalam SATU
+// request supaya backend menilai gate "sudah ada foto sebelumnya?" sekali
+// di awal batch, bukan per file (lihat cellgroup.service.js addPhotosToMeeting).
+export async function uploadMeetingPhotos(
   meetingId: number,
-  file: File,
+  files: File[],
   onProgress?: (percent: number) => void,
-): Promise<{ id: number; sizeKb: number }> {
+): Promise<Array<{ id: number; sizeKb: number }>> {
   const formData = new FormData();
-  formData.append('photo', file);
-  const { data } = await api.post<{ id: number; sizeKb: number }>(
+  files.forEach((file) => formData.append('photos', file));
+  const { data } = await api.post<Array<{ id: number; sizeKb: number }>>(
     `/cell-groups/meetings/${meetingId}/photos`,
     formData,
     {
@@ -148,5 +153,13 @@ export async function getActiveMembersAtMeetingTime(meetingId: number): Promise<
 
 export async function submitAbsensi(meetingId: number, absensi: AbsensiEntry[]): Promise<{ message: string }> {
   const { data } = await api.post<{ message: string }>(`/cell-groups/meetings/${meetingId}/absensi`, { absensi });
+  return data;
+}
+
+// Baca absensi yang sudah tersimpan untuk sebuah meeting — sebelumnya
+// tidak ada endpoint ini sama sekali (bug: absensi tersimpan tidak
+// pernah bisa dilihat lagi).
+export async function getAbsensi(meetingId: number): Promise<AbsensiRecord[]> {
+  const { data } = await api.get<AbsensiRecord[]>(`/cell-groups/meetings/${meetingId}/absensi`);
   return data;
 }

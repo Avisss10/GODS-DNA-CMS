@@ -1,0 +1,46 @@
+### GODS DNA CMS — Dev-only: kelola akun LEADER
+#
+# Rute-rute di bawah ini TIDAK butuh login (tidak ada cookie session) —
+# hanya digerbangi header X-Dev-Secret yang dicek terhadap
+# DEV_MANAGEMENT_SECRET di backend/.env.
+#
+# Cara pakai:
+# 1. Set DEV_MANAGEMENT_SECRET di backend/.env (generate: openssl rand -hex 32).
+# 2. Isi @devSecret di bawah dengan nilai yang SAMA PERSIS.
+# 3. Jalankan backend (npm run dev / npm start).
+# 4. Buka file ini di VS Code dengan ekstensi "REST Client" terpasang,
+#    klik "Send Request" di atas tiap blok.
+#
+# JANGAN commit file ini dengan @devSecret terisi nilai asli.
+
+@baseUrl = http://localhost:3000/api
+@devSecret = GANTI_DENGAN_ISI_DEV_MANAGEMENT_SECRET_DARI_ENV
+
+### Buat akun LEADER baru (dev-only — Leader biasa dari UI hanya bisa buat ADMIN)
+POST {{baseUrl}}/dev/users
+Content-Type: application/json
+X-Dev-Secret: {{devSecret}}
+
+{
+  "username": "leader_baru",
+  "password": "Password123!",
+  "peran": "LEADER"
+}
+
+### Aktifkan/nonaktifkan akun LEADER (dev-only — ganti :id sesuai target)
+PATCH {{baseUrl}}/dev/users/1/status
+Content-Type: application/json
+X-Dev-Secret: {{devSecret}}
+
+{
+  "aktif": false
+}
+
+### Reset password akun LEADER (dev-only — ganti :id sesuai target)
+PUT {{baseUrl}}/dev/users/1/reset-password
+Content-Type: application/json
+X-Dev-Secret: {{devSecret}}
+
+{
+  "newPassword": "PasswordBaru123!"
+}

@@ -128,11 +128,14 @@ async function deleteMeetingPhoto(id) {
 async function findActiveMembersAtMeetingTime(cgId, waktuMeeting) {
   const pool = getPool();
   // j.nama tersimpan sebagai ciphertext (migration 005) — dekripsi
-  // di level aplikasi memakai j.nama_iv sebelum dikembalikan.
+  // di level aplikasi memakai j.nama_iv sebelum dikembalikan. is_leader
+  // dibandingkan dari leader_id CG saat ini, supaya form absensi juga
+  // bisa menandai leader (sama seperti daftar anggota).
   const [rows] = await pool.query(
-    `SELECT j.id, j.nama, j.nama_iv
+    `SELECT j.id, j.nama, j.nama_iv, (cg.leader_id = j.id) AS is_leader
      FROM cell_group_members cgm
      JOIN jemaat j ON cgm.jemaat_id = j.id
+     JOIN cell_group cg ON cgm.cg_id = cg.id
      WHERE cgm.cg_id = :cgId
        AND (cgm.left_at IS NULL OR cgm.left_at > :waktuMeeting)
        AND j.deleted_at IS NULL`,
@@ -141,6 +144,7 @@ async function findActiveMembersAtMeetingTime(cgId, waktuMeeting) {
   return rows.map(({ nama_iv, ...row }) => ({
     ...row,
     nama: decryptOptional(row.nama, nama_iv),
+    is_leader: Boolean(row.is_leader),
   }));
 }
 
@@ -153,9 +157,9 @@ async function findActiveMembersAtMeetingTime(cgId, waktuMeeting) {
  * @param {number} jemaatId
  * @param {boolean} hadir
  */
-async function upsertAbsensi(meetingId, jemaatId, hadir) {
-  const pool = getPool();
-  await pool.query(
+async function upsertAbsensi(meetingId, jemaatId, hadir, connection) {
+  const executor = connection || getPool();
+  await executor.query(
     `INSERT INTO cg_absensi (meeting_id, jemaat_id, hadir)
      VALUES (:meetingId, :jemaatId, :hadir)
      ON DUPLICATE KEY UPDATE hadir = :hadir`,
@@ -241,6 +245,33 @@ async function updateMeeting(meetingId, updates) {
   );
 }
 
+/**
+ * Riwayat kehadiran meeting CG seorang jemaat (hanya yang hadir),
+ * dipakai Timeline Aktivitas di Jemaat Detail Page — join sama persis
+ * dengan yang dipakai scoring.repository.js getCGAttendanceSummary
+ * (cg_absensi.hadir = TRUE, join cg_meeting), tapi di sini per-baris
+ * untuk ditampilkan, bukan agregat untuk hitung skor.
+ *
+ * @param {number} jemaatId
+ * @param {{ limit?: number, offset?: number }} options
+ * @returns {Promise<Array<object>>}
+ */
+async function findAbsensiHistoryByJemaat(jemaatId, { limit = 50, offset = 0 } = {}) {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    `SELECT cm.id AS meeting_id, cm.judul, cm.jenis, cm.waktu_mulai, cm.waktu_selesai,
+            cg.id AS cg_id, cg.nama AS nama_cg
+     FROM cg_absensi ca
+     JOIN cg_meeting cm ON ca.meeting_id = cm.id
+     JOIN cell_group cg ON cm.cg_id = cg.id
+     WHERE ca.jemaat_id = :jemaatId AND ca.hadir = TRUE
+     ORDER BY cm.waktu_mulai DESC
+     LIMIT :limit OFFSET :offset`,
+    { jemaatId, limit: Number(limit), offset: Number(offset) }
+  );
+  return rows;
+}
+
 module.exports = {
   createMeeting,
   findMeetingById,
@@ -253,5 +284,6 @@ module.exports = {
   findActiveMembersAtMeetingTime,
   upsertAbsensi,
   findAbsensiByMeeting,
+  findAbsensiHistoryByJemaat,
   updateMeeting,
 };

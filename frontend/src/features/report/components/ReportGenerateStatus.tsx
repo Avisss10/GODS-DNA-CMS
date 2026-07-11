@@ -9,9 +9,11 @@ interface ReportGenerateStatusProps {
   stage: ReportStage;
   asyncToken: string | null;
   asyncMessage: string;
+  /** Dipanggil dari tombol "Coba lagi" saat unduhan gagal (token kadaluarsa/dipakai) — biasanya cukup memanggil ulang handleGenerate. */
+  onRetry?: () => void;
 }
 
-export default function ReportGenerateStatus({ stage, asyncToken, asyncMessage }: ReportGenerateStatusProps) {
+export default function ReportGenerateStatus({ stage, asyncToken, asyncMessage, onRetry }: ReportGenerateStatusProps) {
   const [downloading, setDownloading] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const [downloadError, setDownloadError] = useState('');
@@ -41,10 +43,10 @@ export default function ReportGenerateStatus({ stage, asyncToken, asyncMessage }
 
   return (
     <div className="rounded-card border border-slate-200 bg-slate-50 p-3 text-sm">
-      {(stage === 'preparing' || stage === 'processing') && (
+      {stage === 'processing' && (
         <div className="flex items-center gap-2 text-slate-600">
           <Loader2 className="h-4 w-4 animate-spin" />
-          {stage === 'preparing' ? 'Menyiapkan...' : 'Diproses...'}
+          Diproses...
         </div>
       )}
 
@@ -88,9 +90,16 @@ export default function ReportGenerateStatus({ stage, asyncToken, asyncMessage }
           )}
 
           {downloadError && (
-            <p className="rounded-card border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
-              {downloadError}
-            </p>
+            <div className="space-y-2">
+              <p className="rounded-card border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+                {downloadError}
+              </p>
+              {onRetry && (
+                <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+                  Coba lagi export
+                </Button>
+              )}
+            </div>
           )}
         </div>
       )}

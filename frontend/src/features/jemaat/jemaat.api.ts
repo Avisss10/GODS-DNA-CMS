@@ -1,10 +1,11 @@
 import { api } from '@/api/client';
 import type {
   CreateJemaatInput,
-  JemaatCellGroup,
+  JemaatCgAttendance,
   JemaatEventHistory,
   JemaatFull,
   JemaatListItem,
+  JemaatVolunteerAssignment,
   StatusKeaktifan,
   UpdateJemaatInput,
 } from '@/types/jemaat.types';
@@ -78,11 +79,6 @@ export async function deleteJemaat(id: number): Promise<{ message: string }> {
   return data;
 }
 
-export async function getJemaatCellGroups(id: number): Promise<JemaatCellGroup[]> {
-  const { data } = await api.get<JemaatCellGroup[]>(`/jemaat/${id}/cell-groups`);
-  return data;
-}
-
 interface EventHistoryParams {
   limit?: number;
   offset?: number;
@@ -93,6 +89,29 @@ export async function getJemaatEventHistory(
   params: EventHistoryParams = {},
 ): Promise<JemaatEventHistory[]> {
   const { data } = await api.get<JemaatEventHistory[]>(`/jemaat/${id}/events`, { params });
+  return data;
+}
+
+// GET /jemaat/:id/cg-attendance-history — kehadiran meeting CG riil
+// (cg_absensi.hadir = TRUE), dipakai Timeline Aktivitas agar selaras
+// dengan sumber data skoring keaktifan (BEDA dari sekadar tanggal join
+// keanggotaan CG).
+export async function getJemaatCgAttendanceHistory(
+  id: number,
+  params: EventHistoryParams = {},
+): Promise<JemaatCgAttendance[]> {
+  const { data } = await api.get<JemaatCgAttendance[]>(`/cell-groups/members/${id}/absensi-history`, { params });
+  return data;
+}
+
+// GET /jemaat/:id/volunteer-assignments — penugasan event_volunteer per
+// event (BEDA dari registrasi jenis volunteer, lihat volunteer.api.ts
+// listVolunteerByJemaat), semua status ditampilkan dengan badge berbeda.
+export async function getJemaatVolunteerAssignments(
+  id: number,
+  params: EventHistoryParams = {},
+): Promise<JemaatVolunteerAssignment[]> {
+  const { data } = await api.get<JemaatVolunteerAssignment[]>(`/jemaat/${id}/volunteer-assignments`, { params });
   return data;
 }
 

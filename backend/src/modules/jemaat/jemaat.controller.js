@@ -37,8 +37,7 @@ async function create(req, res) {
 async function getById(req, res) {
   try {
     const id = Number(req.params.id);
-    const repo = require('./jemaat.repository');
-    const jemaat = await repo.findById(id);
+    const jemaat = await jemaatRepository.findById(id);
 
     if (!jemaat) {
       return res.status(404).json({ message: 'Jemaat tidak ditemukan' });
@@ -137,4 +136,31 @@ async function getEventHistory(req, res) {
   }
 }
 
-module.exports = { create, getById, getFull, getSensitiveField, update, remove, list, getCellGroups, getEventHistory };
+// Beda dari getCellGroups (/jemaat/:id/cell-groups, registrasi jenis
+// volunteer) — ini penugasan event_volunteer per-event, dipakai
+// Timeline Aktivitas di Jemaat Detail Page.
+async function getVolunteerAssignments(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const { limit, offset } = req.query;
+    const eventVolunteerRepository = require('../event/event-volunteer.repository');
+    const assignments = await eventVolunteerRepository.findByJemaatId(id, { limit, offset });
+    return res.status(200).json(assignments);
+  } catch (err) {
+    console.error('Jemaat getVolunteerAssignments error:', err);
+    return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+}
+
+module.exports = {
+  create,
+  getById,
+  getFull,
+  getSensitiveField,
+  update,
+  remove,
+  list,
+  getCellGroups,
+  getEventHistory,
+  getVolunteerAssignments,
+};

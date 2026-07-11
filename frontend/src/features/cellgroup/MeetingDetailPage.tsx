@@ -1,8 +1,8 @@
-﻿import { useRef, useState, type ChangeEvent } from 'react';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from '@/lib/toast';
-import { ArrowLeft, CalendarClock, ClipboardList, ImagePlus, Loader2, Pencil, X } from 'lucide-react';
+import { ArrowLeft, CalendarClock, CheckCircle2, ClipboardList, Pencil, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,14 +17,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { deletePhoto, getMeetingById, listMeetingPhotos, uploadMeetingPhoto } from './cellgroup.api';
+import { useAuthStore } from '@/store/auth.store';
+import { deletePhoto, getAbsensi, getMeetingById, listMeetingPhotos } from './cellgroup.api';
 import MeetingFormModal from './components/MeetingFormModal';
 import PhotoThumbnail from './components/PhotoThumbnail';
-import AbsensiDialog from './components/AbsensiDialog';
+import MeetingReportDialog from './components/MeetingReportDialog';
 import Breadcrumb from '../../components/Breadcrumb';
 
 const MAX_PHOTOS = 5;
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 function formatDateTime(dateStr: string) {
   return new Date(dateStr).toLocaleString('id-ID', {
@@ -41,14 +41,12 @@ export default function MeetingDetailPage() {
   const meetingId = Number(meetingIdParam);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const peran = useAuthStore((s) => s.peran);
 
   const [editOpen, setEditOpen] = useState(false);
-  const [absensiOpen, setAbsensiOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const meetingQuery = useQuery({
@@ -63,45 +61,22 @@ export default function MeetingDetailPage() {
     enabled: Number.isFinite(meetingId),
   });
 
-  const photoCount = photosQuery.data?.length ?? 0;
-  const isFull = photoCount >= MAX_PHOTOS;
+  const absensiQuery = useQuery({
+    queryKey: ['cellgroup', 'meeting', meetingId, 'absensi'],
+    queryFn: () => getAbsensi(meetingId),
+    enabled: Number.isFinite(meetingId),
+  });
 
-  function refetchPhotos() {
+  const photoCount = photosQuery.data?.length ?? 0;
+  const hasReport = photoCount > 0 || (absensiQuery.data?.length ?? 0) > 0;
+  const meetingEnded = meetingQuery.data ? new Date() > new Date(meetingQuery.data.waktu_selesai) : false;
+  const isLeader = peran === 'LEADER';
+
+  function refetchReport() {
     queryClient.invalidateQueries({ queryKey: ['cellgroup', 'meeting', meetingId, 'photos'] });
+    queryClient.invalidateQueries({ queryKey: ['cellgroup', 'meeting', meetingId, 'absensi'] });
     if (meetingQuery.data) {
       queryClient.invalidateQueries({ queryKey: ['cellgroup', meetingQuery.data.cg_id, 'meetings'] });
-    }
-  }
-
-  async function handleFileSelected(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ''; // reset supaya file yang sama bisa dipilih lagi
-    if (!file) return;
-
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      toast.error('Tipe file tidak didukung. Hanya JPEG, PNG, atau WebP');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Ukuran file terlalu besar (maksimal 10MB)');
-      return;
-    }
-
-    setIsUploading(true);
-    setUploadProgress(0);
-    try {
-      await uploadMeetingPhoto(meetingId, file, setUploadProgress);
-      toast.success('Foto berhasil diunggah');
-      refetchPhotos();
-    } catch (err: unknown) {
-      const message =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
-          : undefined;
-      toast.error(message || 'Gagal mengunggah foto');
-    } finally {
-      setIsUploading(false);
-      setUploadProgress(0);
     }
   }
 
@@ -112,7 +87,7 @@ export default function MeetingDetailPage() {
       await deletePhoto(deleteTarget);
       toast.success('Foto berhasil dihapus');
       setDeleteTarget(null);
-      refetchPhotos();
+      refetchReport();
     } catch {
       toast.error('Gagal menghapus foto');
     } finally {
@@ -148,6 +123,17 @@ export default function MeetingDetailPage() {
 
   const meeting = meetingQuery.data;
 
+  // Tombol laporan: belum selesai -> nonaktif dengan keterangan. Sudah
+  // selesai & belum ada laporan -> aktif untuk ADMIN maupun LEADER. Sudah
+  // ada laporan -> ADMIN tidak dapat tombol sama sekali (read-only total),
+  // LEADER dapat tombol "Edit Laporan Meeting".
+  const showReportButton = meetingEnded && (!hasReport || isLeader);
+  const reportButtonLabel = !meetingEnded
+    ? 'Tersedia setelah meeting selesai'
+    : hasReport
+      ? 'Edit Laporan Meeting'
+      : 'Laporkan Meeting';
+
   return (
     <div className="space-y-4">
       <Breadcrumb
@@ -168,7 +154,7 @@ export default function MeetingDetailPage() {
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Badge variant="outline">{meeting.jenis}</Badge>
               <span className="flex items-center gap-1 text-xs text-slate-500">
-                <CalendarClock className="h-3.5 w-3.5" /> {formatDateTime(meeting.waktu_mulai)} â€”{' '}
+                <CalendarClock className="h-3.5 w-3.5" /> {formatDateTime(meeting.waktu_mulai)} —{' '}
                 {formatDateTime(meeting.waktu_selesai)}
               </span>
             </div>
@@ -179,9 +165,11 @@ export default function MeetingDetailPage() {
           <Button variant="outline" onClick={() => setEditOpen(true)}>
             <Pencil className="h-4 w-4" /> Edit
           </Button>
-          <Button onClick={() => setAbsensiOpen(true)}>
-            <ClipboardList className="h-4 w-4" /> Input Absensi
-          </Button>
+          {showReportButton && (
+            <Button disabled={!meetingEnded} onClick={() => setReportOpen(true)}>
+              <ClipboardList className="h-4 w-4" /> {reportButtonLabel}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -197,6 +185,42 @@ export default function MeetingDetailPage() {
       )}
 
       <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Absensi Tersimpan</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {absensiQuery.isLoading && (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-8 rounded-card" />
+              ))}
+            </div>
+          )}
+
+          {!absensiQuery.isLoading && (absensiQuery.data?.length ?? 0) === 0 && (
+            <EmptyState icon={ClipboardList} title="Belum ada absensi tersimpan" className="py-6" />
+          )}
+
+          {!absensiQuery.isLoading && (absensiQuery.data?.length ?? 0) > 0 && (
+            <ul className="divide-y divide-slate-100 rounded-card border border-slate-200">
+              {absensiQuery.data!.map((a) => (
+                <li key={a.jemaat_id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                  <span className="text-slate-700">{a.nama}</span>
+                  {a.hadir ? (
+                    <span className="flex items-center gap-1 text-xs font-medium text-status-aktifText">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Hadir
+                    </span>
+                  ) : (
+                    <span className="text-xs font-medium text-slate-400">Tidak Hadir</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">Galeri Foto</CardTitle>
           <span className="text-sm text-slate-500">
@@ -204,29 +228,6 @@ export default function MeetingDetailPage() {
           </span>
         </CardHeader>
         <CardContent className="space-y-3">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="hidden"
-            onChange={handleFileSelected}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={isFull || isUploading}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-            {isFull ? 'Kuota foto penuh (5/5)' : isUploading ? `Mengunggah ${uploadProgress}%` : 'Unggah Foto'}
-          </Button>
-
-          {isUploading && (
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-              <div className="h-full bg-modul-cellgroup transition-all" style={{ width: `${uploadProgress}%` }} />
-            </div>
-          )}
-
           {photosQuery.isLoading && (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -236,7 +237,7 @@ export default function MeetingDetailPage() {
           )}
 
           {!photosQuery.isLoading && photoCount === 0 && (
-            <EmptyState icon={ImagePlus} title="Belum ada foto dokumentasi" className="py-8" />
+            <EmptyState icon={ClipboardList} title="Belum ada foto dokumentasi" className="py-8" />
           )}
 
           {!photosQuery.isLoading && photoCount > 0 && (
@@ -248,6 +249,7 @@ export default function MeetingDetailPage() {
                   onClick={setLightboxUrl}
                   onDelete={() => setDeleteTarget(p.id)}
                   isDeleting={isDeleting && deleteTarget === p.id}
+                  canDelete={isLeader}
                 />
               ))}
             </div>
@@ -263,7 +265,13 @@ export default function MeetingDetailPage() {
         onSuccess={() => queryClient.invalidateQueries({ queryKey: ['cellgroup', 'meeting', meetingId] })}
       />
 
-      <AbsensiDialog open={absensiOpen} meetingId={meetingId} onOpenChange={setAbsensiOpen} onSuccess={() => {}} />
+      <MeetingReportDialog
+        open={reportOpen}
+        meetingId={meetingId}
+        existingPhotoCount={photoCount}
+        onOpenChange={setReportOpen}
+        onSuccess={refetchReport}
+      />
 
       <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <DialogContent>

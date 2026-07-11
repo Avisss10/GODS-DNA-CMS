@@ -3,6 +3,7 @@ import { BarChart3, CalendarDays, HandHeart, Users, UsersRound, type LucideIcon 
 import { cn } from '@/lib/utils';
 import type { ReportJenis } from '@/types/report.types';
 import ReportFormModal from './components/ReportFormModal';
+import AsyncDownloadBanner, { type PendingDownload } from './components/AsyncDownloadBanner';
 import Breadcrumb from '../../components/Breadcrumb';
 
 interface ReportCardDef {
@@ -24,6 +25,7 @@ const REPORT_CARDS: ReportCardDef[] = [
 
 export default function ReportPage() {
   const [activeJenis, setActiveJenis] = useState<ReportJenis | null>(null);
+  const [pendingDownload, setPendingDownload] = useState<PendingDownload | null>(null);
 
   return (
     <div className="space-y-4">
@@ -32,6 +34,8 @@ export default function ReportPage() {
         <h1 className="text-xl font-bold text-slate-800">Report</h1>
         <p className="text-sm text-slate-500">Generate laporan data dalam format Excel atau PDF</p>
       </div>
+
+      <AsyncDownloadBanner pending={pendingDownload} onClear={() => setPendingDownload(null)} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {REPORT_CARDS.map((card) => (
@@ -55,7 +59,11 @@ export default function ReportPage() {
         ))}
       </div>
 
-      <ReportFormModal jenis={activeJenis} onOpenChange={(open) => !open && setActiveJenis(null)} />
+      <ReportFormModal
+        jenis={activeJenis}
+        onOpenChange={(open) => !open && setActiveJenis(null)}
+        onAsyncReady={(payload) => activeJenis && setPendingDownload({ ...payload, jenis: activeJenis })}
+      />
     </div>
   );
 }

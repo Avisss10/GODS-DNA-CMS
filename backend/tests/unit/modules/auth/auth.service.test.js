@@ -17,7 +17,7 @@ const { getRedisClient } = require('../../../../src/config/redis');
 const { recordAuditLog } = require('../../../../src/modules/auditlog/auditlog.repository');
 const { notifyLeaders } = require('../../../../src/modules/notification/notification.stub');
 const {
-  login, logout, refreshAccessToken, createUser, updateUserStatus, AuthError,
+  login, logout, refreshAccessToken, createUser, updateUserStatus, resetAdminPassword, AuthError,
 } = require('../../../../src/modules/auth/auth.service');
 
 describe('auth.service — login (Unit Test)', () => {
@@ -285,6 +285,30 @@ describe('auth.service — createUser (Unit Test)', () => {
 
     expect(authRepository.createUser).not.toHaveBeenCalled();
   });
+
+  it('harus 403 jika actor biasa (bukan dev) mencoba membuat akun LEADER', async () => {
+    await expect(createUser({ username: 'leader_baru', password: 'PasswordBaru123', peran: 'LEADER' }, { actorUserId: 1 }))
+      .rejects.toMatchObject({ statusCode: 403 });
+
+    expect(authRepository.findByUsername).not.toHaveBeenCalled();
+    expect(authRepository.createUser).not.toHaveBeenCalled();
+  });
+
+  it('harus berhasil membuat akun LEADER kalau dipanggil lewat jalur dev (isDev:true)', async () => {
+    authRepository.findByUsername.mockResolvedValue(null);
+    hashPassword.mockResolvedValue('hashed-password');
+    authRepository.createUser.mockResolvedValue(43);
+
+    const result = await createUser(
+      { username: 'leader_baru', password: 'PasswordBaru123', peran: 'LEADER' },
+      { actorUserId: null, isDev: true }
+    );
+
+    expect(result).toEqual({ id: 43, username: 'leader_baru', peran: 'LEADER' });
+    expect(recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: null, aksi: 'DEV_CREATE_USER', modul: 'USER' })
+    );
+  });
 });
 
 describe('auth.service — updateUserStatus (Unit Test)', () => {
@@ -355,6 +379,109 @@ describe('auth.service — updateUserStatus (Unit Test)', () => {
 
     expect(recordAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({ aksi: 'ACTIVATE_USER', modul: 'USER' })
+    );
+  });
+
+  it('harus 403 jika LEADER mencoba mengubah status LEADER lain', async () => {
+    authRepository.findById.mockResolvedValue({ id: 5, username: 'leader_lain', peran: 'LEADER', aktif: true });
+    authRepository.countActiveLeaders.mockResolvedValue(5);
+
+    await expect(updateUserStatus(5, false, { actorUserId: 1, actorRole: 'LEADER' }))
+      .rejects.toMatchObject({ statusCode: 403 });
+
+    expect(authRepository.updateAktif).not.toHaveBeenCalled();
+  });
+
+  it('LEADER tetap boleh mengubah status akun dirinya sendiri', async () => {
+    authRepository.findById.mockResolvedValue({ id: 1, username: 'leader1', peran: 'LEADER', aktif: true });
+    authRepository.countActiveLeaders.mockResolvedValue(5);
+
+    await updateUserStatus(1, false, { actorUserId: 1, actorRole: 'LEADER' });
+
+    expect(authRepository.updateAktif).toHaveBeenCalledWith(1, false);
+  });
+
+  it('ADMIN boleh mengubah status akun LEADER (restriksi hanya utk actor LEADER)', async () => {
+    authRepository.findById.mockResolvedValue({ id: 5, username: 'leader_lain', peran: 'LEADER', aktif: true });
+    authRepository.countActiveLeaders.mockResolvedValue(5);
+
+    await updateUserStatus(5, false, { actorUserId: 2, actorRole: 'ADMIN' });
+
+    expect(authRepository.updateAktif).toHaveBeenCalledWith(5, false);
+  });
+
+  it('jalur dev (isDev:true) melewati restriksi LEADER-vs-LEADER', async () => {
+    authRepository.findById.mockResolvedValue({ id: 5, username: 'leader_lain', peran: 'LEADER', aktif: true });
+    authRepository.countActiveLeaders.mockResolvedValue(5);
+
+    await updateUserStatus(5, false, { actorUserId: null, actorRole: null, isDev: true });
+
+    expect(authRepository.updateAktif).toHaveBeenCalledWith(5, false);
+    expect(recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: null, aksi: 'DEV_DEACTIVATE_USER', modul: 'USER' })
+    );
+  });
+});
+
+describe('auth.service — resetAdminPassword (Unit Test)', () => {
+  let mockRedis;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockRedis = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
+    };
+    getRedisClient.mockReturnValue(mockRedis);
+    recordAuditLog.mockResolvedValue(1);
+    hashPassword.mockResolvedValue('hashed-new-password');
+  });
+
+  it('harus 404 jika target tidak ditemukan', async () => {
+    authRepository.findById.mockResolvedValue(null);
+
+    await expect(resetAdminPassword(1, 99, 'PasswordBaru123'))
+      .rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('harus 400 jika password baru kurang dari 8 karakter', async () => {
+    await expect(resetAdminPassword(1, 6, 'short'))
+      .rejects.toMatchObject({ statusCode: 400 });
+
+    expect(authRepository.findById).not.toHaveBeenCalled();
+  });
+
+  it('harus 403 jika LEADER (bukan dev) mencoba reset password target LEADER', async () => {
+    authRepository.findById.mockResolvedValue({ id: 5, username: 'leader_lain', peran: 'LEADER' });
+
+    await expect(resetAdminPassword(1, 5, 'PasswordBaru123'))
+      .rejects.toMatchObject({ statusCode: 403 });
+
+    expect(authRepository.updatePassword).not.toHaveBeenCalled();
+  });
+
+  it('harus berhasil reset password target ADMIN oleh LEADER', async () => {
+    authRepository.findById.mockResolvedValue({ id: 6, username: 'admin1', peran: 'ADMIN' });
+
+    const result = await resetAdminPassword(1, 6, 'PasswordBaru123');
+
+    expect(authRepository.updatePassword).toHaveBeenCalledWith(6, 'hashed-new-password');
+    expect(result).toEqual({ username: 'admin1' });
+    expect(recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 1, aksi: 'RESET_PASSWORD', modul: 'AUTH' })
+    );
+  });
+
+  it('jalur dev (isDev:true) boleh reset password target LEADER', async () => {
+    authRepository.findById.mockResolvedValue({ id: 5, username: 'leader_lain', peran: 'LEADER' });
+
+    const result = await resetAdminPassword(null, 5, 'PasswordBaru123', { isDev: true });
+
+    expect(authRepository.updatePassword).toHaveBeenCalledWith(5, 'hashed-new-password');
+    expect(result).toEqual({ username: 'leader_lain' });
+    expect(recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: null, aksi: 'DEV_RESET_PASSWORD', modul: 'AUTH' })
     );
   });
 });

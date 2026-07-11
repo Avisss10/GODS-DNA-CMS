@@ -215,21 +215,6 @@ async function suggestVolunteers(req, res) {
   }
 }
 
-// Deferred dari Step 12
-async function listVolunteerTypeMembers(req, res) {
-  try {
-    const volunteerMemberRepository = require('../volunteer/volunteer-member.repository');
-    const volunteerJenisRepository = require('../volunteer/volunteer-jenis.repository');
-    const id = Number(req.params.id);
-    const jenis = await volunteerJenisRepository.findById(id);
-    if (!jenis) return res.status(404).json({ message: 'Jenis volunteer tidak ditemukan' });
-    const members = await volunteerMemberRepository.findActiveByType(id);
-    return res.status(200).json(members);
-  } catch (err) {
-    return handleError(err, res);
-  }
-}
-
 module.exports = {
   createEvent,
   listEvents,
@@ -245,5 +230,4 @@ module.exports = {
   getVolunteerNeeds,
   updateVolunteerNeeds,
   suggestVolunteers,
-  listVolunteerTypeMembers,
 };

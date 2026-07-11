@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const controller = require('./cellgroup.controller');
+const { MAX_PHOTOS_PER_MEETING } = require('./cellgroup.service');
 const { authenticate } = require('../../middlewares/auth.middleware');
 const { handleValidationErrors } = require('../../middlewares/validation.middleware');
 const {
@@ -33,15 +34,24 @@ const upload = multer({
   },
 });
 
-// Bungkus upload.single agar error multer (tipe file salah, file terlalu
-// besar) dibalas 400 dengan pesan jelas, bukan jatuh ke error boundary 500.
-function uploadSinglePhoto(req, res, next) {
-  upload.single('photo')(req, res, (err) => {
+// Bungkus upload.array agar error multer (tipe file salah, file terlalu
+// besar, file lebih dari batas) dibalas 400 dengan pesan jelas, bukan
+// jatuh ke error boundary 500. Batch (bukan single) karena absensi & foto
+// sama-sama "sekali setelah meeting selesai" — upload sampai
+// MAX_PHOTOS_PER_MEETING foto sekaligus dianggap satu aksi (lihat
+// cellgroup.service.js addPhotosToMeeting).
+function uploadMeetingPhotos(req, res, next) {
+  upload.array('photos', MAX_PHOTOS_PER_MEETING)(req, res, (err) => {
     if (!err) return next();
     if (err instanceof multer.MulterError) {
+      // LIMIT_UNEXPECTED_FILE sengaja TIDAK ditimpa di sini — kode itu juga
+      // dipakai fileFilter di atas untuk menolak tipe file salah, dengan
+      // pesannya sendiri yang lebih spesifik (err.message).
       const message = err.code === 'LIMIT_FILE_SIZE'
-        ? 'Ukuran file terlalu besar (maksimal 10MB)'
-        : err.message;
+        ? 'Ukuran file terlalu besar (maksimal 10MB per file)'
+        : err.code === 'LIMIT_FILE_COUNT'
+          ? `Maksimal ${MAX_PHOTOS_PER_MEETING} foto per unggahan`
+          : err.message;
       return res.status(400).json({ message });
     }
     return next(err);
@@ -61,11 +71,13 @@ router.get('/cell-groups/:id/meetings', authenticate, controller.listMeetingsByC
 router.post('/cell-groups/:id/meetings', authenticate, createMeetingValidation, handleValidationErrors, controller.createMeeting);
 router.get('/cell-groups/meetings/:meetingId', authenticate, controller.getMeetingById);
 router.put('/cell-groups/meetings/:meetingId', authenticate, updateMeetingValidation, handleValidationErrors, controller.updateMeeting);
-router.post('/cell-groups/meetings/:meetingId/photos', authenticate, uploadSinglePhoto, controller.uploadPhoto);
+router.post('/cell-groups/meetings/:meetingId/photos', authenticate, uploadMeetingPhotos, controller.uploadPhoto);
 router.get('/cell-groups/meetings/:meetingId/photos', authenticate, controller.listMeetingPhotos);
 router.get('/cell-groups/photos/:photoId', authenticate, controller.getPhoto);
 router.delete('/cell-groups/photos/:photoId', authenticate, controller.deletePhoto);
 router.get('/cell-groups/meetings/:meetingId/active-members', authenticate, controller.getActiveMembersAtMeetingTime);
+router.get('/cell-groups/meetings/:meetingId/absensi', authenticate, controller.getAbsensi);
+router.get('/cell-groups/members/:jemaatId/absensi-history', authenticate, controller.getAbsensiHistoryByJemaat);
 router.post('/cell-groups/meetings/:meetingId/absensi', authenticate, submitAbsensiValidation, handleValidationErrors, controller.submitAbsensi);
 
 module.exports = router;

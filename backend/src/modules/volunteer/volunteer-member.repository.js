@@ -80,7 +80,8 @@ async function findActiveByJemaat(jemaatId) {
 /**
  * Mengambil seluruh jemaat yang aktif terdaftar pada sebuah jenis
  * volunteer tertentu — dipakai modul Event (Step 13) untuk
- * Auto-Suggest Volunteer (BAGIAN 5.4).
+ * Auto-Suggest Volunteer (BAGIAN 5.4), dan modul Volunteer untuk
+ * halaman detail jenis volunteer (daftar anggota).
  *
  * @param {number} volunteerTypeId
  * @returns {Promise<Array<object>>}
@@ -91,7 +92,7 @@ async function findActiveByType(volunteerTypeId) {
   // di level aplikasi memakai j.nama_iv sebelum dikembalikan.
   const [rows] = await pool.query(
     `SELECT vm.id, j.id AS jemaat_id, j.nama, j.nama_iv, j.is_new_member,
-            j.skor_keaktifan, j.status_keaktifan
+            j.skor_keaktifan, j.status_keaktifan, vm.joined_at
      FROM volunteer_members vm
      JOIN jemaat j ON vm.jemaat_id = j.id
      WHERE vm.volunteer_type_id = :volunteerTypeId

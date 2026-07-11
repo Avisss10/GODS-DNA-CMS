@@ -260,16 +260,19 @@ async function refreshAccessToken(refreshTokenFromCookie) {
 }
 
 /**
- * Reset password akun ADMIN oleh LEADER.
+ * Reset password akun ADMIN oleh LEADER (atau akun manapun termasuk
+ * LEADER, kalau dipanggil lewat jalur dev-only via isDev:true).
  * Leader tidak bisa reset password sesama Leader.
  *
- * @param {number} leaderId - id user yang melakukan reset (LEADER)
- * @param {number} targetUserId - id akun ADMIN yang akan direset
+ * @param {number|null} leaderId - id user yang melakukan reset (LEADER), null kalau isDev
+ * @param {number} targetUserId - id akun yang akan direset
  * @param {string} newPassword - password baru (plaintext)
+ * @param {object} options
+ * @param {boolean} options.isDev - true kalau dipanggil lewat rute dev-only (bypass restriksi target ADMIN)
  * @returns {Promise<{ username: string }>}
- * @throws {AuthError} 404 jika target tidak ditemukan, 403 jika target bukan ADMIN
+ * @throws {AuthError} 404 jika target tidak ditemukan, 403 jika target bukan ADMIN (dan bukan isDev)
  */
-async function resetAdminPassword(leaderId, targetUserId, newPassword) {
+async function resetAdminPassword(leaderId, targetUserId, newPassword, { isDev = false } = {}) {
   if (!newPassword || newPassword.length < 8) {
     throw new AuthError('Password baru minimal 8 karakter', 400);
   }
@@ -278,7 +281,7 @@ async function resetAdminPassword(leaderId, targetUserId, newPassword) {
   if (!target) {
     throw new AuthError('User tidak ditemukan', 404);
   }
-  if (target.peran !== 'ADMIN') {
+  if (!isDev && target.peran !== 'ADMIN') {
     throw new AuthError('Hanya password akun ADMIN yang dapat direset oleh Leader', 403);
   }
 
@@ -297,7 +300,7 @@ async function resetAdminPassword(leaderId, targetUserId, newPassword) {
 
   await recordAuditLog({
     userId: leaderId,
-    aksi: 'RESET_PASSWORD',
+    aksi: isDev ? 'DEV_RESET_PASSWORD' : 'RESET_PASSWORD',
     modul: 'AUTH',
     objectId: targetUserId,
     dataSebelum: { username: target.username },
@@ -309,15 +312,22 @@ async function resetAdminPassword(leaderId, targetUserId, newPassword) {
 
 /**
  * Membuat akun ADMIN/LEADER baru (hanya bisa dipanggil oleh LEADER —
- * ditegakkan di layer route via requireRole).
+ * ditegakkan di layer route via requireRole). Membuat akun LEADER baru
+ * hanya boleh lewat jalur dev-only (isDev:true) — LEADER biasa hanya
+ * bisa membuat akun ADMIN.
  *
  * @param {{ username: string, password: string, peran: 'LEADER'|'ADMIN' }} data
  * @param {object} options
- * @param {number} options.actorUserId - LEADER yang membuat akun (untuk audit log)
+ * @param {number} options.actorUserId - LEADER yang membuat akun (untuk audit log), null kalau isDev
+ * @param {boolean} options.isDev - true kalau dipanggil lewat rute dev-only (bypass restriksi peran LEADER)
  * @returns {Promise<{ id: number, username: string, peran: string }>}
- * @throws {AuthError} 409 jika username sudah terdaftar
+ * @throws {AuthError} 409 jika username sudah terdaftar, 403 jika actor biasa mencoba buat LEADER
  */
-async function createUser({ username, password, peran }, { actorUserId = null } = {}) {
+async function createUser({ username, password, peran }, { actorUserId = null, isDev = false } = {}) {
+  if (!isDev && peran === 'LEADER') {
+    throw new AuthError('Hanya dev yang dapat membuat akun LEADER baru', 403);
+  }
+
   const existing = await authRepository.findByUsername(username);
   if (existing) {
     throw new AuthError('Username sudah terdaftar', 409);
@@ -328,7 +338,7 @@ async function createUser({ username, password, peran }, { actorUserId = null } 
 
   await recordAuditLog({
     userId: actorUserId,
-    aksi: 'CREATE_USER',
+    aksi: isDev ? 'DEV_CREATE_USER' : 'CREATE_USER',
     modul: 'USER',
     objectId: id,
     dataSebelum: null,
@@ -340,20 +350,28 @@ async function createUser({ username, password, peran }, { actorUserId = null } 
 
 /**
  * Mengaktifkan/menonaktifkan akun user (hanya bisa dipanggil oleh
- * LEADER). Menolak menonaktifkan LEADER jika itu satu-satunya LEADER
- * aktif yang tersisa (BAGIAN 12 #2).
+ * LEADER). LEADER tidak boleh mengubah status akun LEADER lain (kecuali
+ * dirinya sendiri) — hanya dev (isDev:true) yang bisa. Menolak
+ * menonaktifkan LEADER jika itu satu-satunya LEADER aktif yang tersisa
+ * (BAGIAN 12 #2).
  *
  * @param {number} targetUserId
  * @param {boolean} aktif
  * @param {object} options
  * @param {number} options.actorUserId
+ * @param {string} options.actorRole - peran user yang melakukan aksi ('LEADER'|'ADMIN')
+ * @param {boolean} options.isDev - true kalau dipanggil lewat rute dev-only (bypass restriksi LEADER-vs-LEADER)
  * @returns {Promise<{ username: string }>}
- * @throws {AuthError} 404 jika user tidak ditemukan, 400 jika menonaktifkan satu-satunya LEADER aktif
+ * @throws {AuthError} 404 jika user tidak ditemukan, 403 jika LEADER mencoba ubah LEADER lain, 400 jika menonaktifkan satu-satunya LEADER aktif
  */
-async function updateUserStatus(targetUserId, aktif, { actorUserId = null } = {}) {
+async function updateUserStatus(targetUserId, aktif, { actorUserId = null, actorRole = null, isDev = false } = {}) {
   const target = await authRepository.findById(targetUserId);
   if (!target) {
     throw new AuthError('User tidak ditemukan', 404);
+  }
+
+  if (!isDev && actorRole === 'LEADER' && target.peran === 'LEADER' && actorUserId !== targetUserId) {
+    throw new AuthError('Leader tidak dapat mengubah status akun Leader lain, hubungi dev', 403);
   }
 
   if (target.peran === 'LEADER' && aktif === false) {
@@ -367,7 +385,7 @@ async function updateUserStatus(targetUserId, aktif, { actorUserId = null } = {}
 
   await recordAuditLog({
     userId: actorUserId,
-    aksi: aktif ? 'ACTIVATE_USER' : 'DEACTIVATE_USER',
+    aksi: isDev ? (aktif ? 'DEV_ACTIVATE_USER' : 'DEV_DEACTIVATE_USER') : (aktif ? 'ACTIVATE_USER' : 'DEACTIVATE_USER'),
     modul: 'USER',
     objectId: targetUserId,
     dataSebelum: { aktif: target.aktif },

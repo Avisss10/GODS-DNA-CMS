@@ -179,7 +179,10 @@ async function updateUserStatus(req, res) {
   const { aktif } = req.body;
 
   try {
-    const result = await updateUserStatusService(targetUserId, aktif, { actorUserId: req.user.userId });
+    const result = await updateUserStatusService(targetUserId, aktif, {
+      actorUserId: req.user.userId,
+      actorRole: req.user.peran,
+    });
     return res.status(200).json({ message: `Status akun "${result.username}" berhasil diubah` });
   } catch (err) {
     if (err instanceof AuthError) {
@@ -190,4 +193,81 @@ async function updateUserStatus(req, res) {
   }
 }
 
-module.exports = { login, logout, refresh, me, listAdmins, listUsers, resetAdminPassword, createUser, updateUserStatus };
+/**
+ * Jalur dev-only (backend/rest-dev.http) — tanpa sesi login, hanya
+ * digerbangi middleware requireDevSecret. actorUserId sengaja null
+ * karena bukan aksi dari sesi user; audit log ditandai isDev:true
+ * di service (aksi berprefix DEV_).
+ */
+async function devCreateUser(req, res) {
+  const { username, password, peran } = req.body;
+
+  try {
+    const result = await createUserService({ username, password, peran }, { actorUserId: null, isDev: true });
+    return res.status(201).json(result);
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return res.status(err.statusCode).json({ message: err.message });
+    }
+    console.error('devCreateUser error:', err);
+    return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+}
+
+async function devUpdateUserStatus(req, res) {
+  const targetUserId = Number(req.params.id);
+  const { aktif } = req.body;
+
+  try {
+    const result = await updateUserStatusService(targetUserId, aktif, {
+      actorUserId: null,
+      actorRole: null,
+      isDev: true,
+    });
+    return res.status(200).json({ message: `Status akun "${result.username}" berhasil diubah` });
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return res.status(err.statusCode).json({ message: err.message });
+    }
+    console.error('devUpdateUserStatus error:', err);
+    return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+}
+
+async function devResetPassword(req, res) {
+  const targetUserId = Number(req.params.id);
+  const { newPassword } = req.body;
+
+  if (!targetUserId || isNaN(targetUserId)) {
+    return res.status(400).json({ message: 'ID user tidak valid' });
+  }
+  if (!newPassword) {
+    return res.status(400).json({ message: 'newPassword wajib diisi' });
+  }
+
+  try {
+    const result = await resetAdminPasswordService(null, targetUserId, newPassword, { isDev: true });
+    return res.status(200).json({ message: `Password akun "${result.username}" berhasil direset` });
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return res.status(err.statusCode).json({ message: err.message });
+    }
+    console.error('devResetPassword error:', err);
+    return res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+}
+
+module.exports = {
+  login,
+  logout,
+  refresh,
+  me,
+  listAdmins,
+  listUsers,
+  resetAdminPassword,
+  createUser,
+  updateUserStatus,
+  devCreateUser,
+  devUpdateUserStatus,
+  devResetPassword,
+};

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
-import { Loader2, Plus, Search, Users } from 'lucide-react';
+import { Download, Eye, Loader2, Plus, Search, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -22,16 +22,26 @@ import BulkActionToolbar from '@/components/BulkActionToolbar';
 import BulkActionSummaryDialog from '@/components/BulkActionSummaryDialog';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import SavedFiltersBar from '@/components/SavedFiltersBar';
+import Pagination from '@/components/Pagination';
 import { useBulkAction, type BulkActionResult } from '@/hooks/useBulkAction';
 import { useSavedFilters } from '@/hooks/useSavedFilters';
-import type { JemaatDependencies, StatusKeaktifan } from '@/types/jemaat.types';
+import { useSort, type SortExtractors } from '@/hooks/useSort';
+import type { JemaatDependencies, JemaatListItem, StatusKeaktifan } from '@/types/jemaat.types';
 import { deleteJemaat, listJemaat } from './jemaat.api';
 import { STATUS_FILTER_OPTIONS } from './jemaat.constants';
 import StatusKeaktifanBadge from './components/StatusKeaktifanBadge';
 import JemaatFormModal from './components/JemaatFormModal';
+import JemaatExportDialog from './components/JemaatExportDialog';
 
 const PAGE_SIZE = 20;
 const FETCH_LIMIT = 500;
+
+const JEMAAT_SORT_EXTRACTORS: SortExtractors<JemaatListItem> = {
+  nama: (j) => j.nama,
+  tgl_bergabung: (j) => j.tgl_bergabung ?? '',
+  skor_keaktifan: (j) => j.skor_keaktifan ?? -1,
+  status_keaktifan: (j) => j.status_keaktifan,
+};
 
 interface JemaatSavedFilter {
   search: string;
@@ -81,6 +91,7 @@ export default function JemaatListPage() {
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [bulkResults, setBulkResults] = useState<BulkActionResult[] | null>(null);
   const { run: runBulk, isRunning: isBulkRunning } = useBulkAction();
+  const [exportOpen, setExportOpen] = useState(false);
 
   const { savedFilters, save: saveFilter, remove: removeFilter } = useSavedFilters<JemaatSavedFilter>('jemaat-list');
 
@@ -109,12 +120,29 @@ export default function JemaatListPage() {
     });
   }, [data, debouncedSearch, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const { sorted, handleSort, directionFor } = useSort(filtered, JEMAAT_SORT_EXTRACTORS);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const hasNoJemaatAtAll = !isLoading && !isError && (data?.length ?? 0) === 0;
   const hasNoFilterResult = !isLoading && !isError && (data?.length ?? 0) > 0 && filtered.length === 0;
   const hasActiveFilter = searchInput.trim() !== '' || statusFilter !== 'ALL';
+  // Ringkasan filter aktif untuk dicatat di file export (Excel/PDF) —
+  // undefined kalau tidak ada filter, biar backend tidak mencetak baris
+  // "Filter aktif" sama sekali.
+  const exportFilterDescription = hasActiveFilter
+    ? [
+        statusFilter !== 'ALL' && `Status: ${STATUS_FILTER_OPTIONS.find((o) => o.value === statusFilter)?.label ?? statusFilter}`,
+        searchInput.trim() !== '' && `Pencarian: "${searchInput.trim()}"`,
+      ]
+        .filter(Boolean)
+        .join('; ')
+    : undefined;
+  // Query hanya mengambil FETCH_LIMIT baris — kalau jumlahnya persis pas
+  // limit, kemungkinan besar masih ada jemaat lain yang tidak ikut termuat
+  // (tidak tampil di tabel, tidak bisa dicentang/diexport).
+  const isPossiblyTruncated = !isLoading && (data?.length ?? 0) === FETCH_LIMIT;
 
   function resetFilters() {
     setSearchInput('');
@@ -221,11 +249,24 @@ export default function JemaatListPage() {
         actionLabel="Nonaktifkan Terpilih"
         onAction={() => setBulkConfirmOpen(true)}
         onClear={() => setSelectedIds(new Set())}
+        extraActions={
+          <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
+            <Download className="h-3.5 w-3.5" />
+            Export Terpilih
+          </Button>
+        }
       />
 
       {isError && (
         <p className="rounded-card border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
           Gagal memuat data jemaat. Silakan muat ulang halaman.
+        </p>
+      )}
+
+      {isPossiblyTruncated && (
+        <p className="rounded-card border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 print:hidden">
+          Menampilkan {FETCH_LIMIT} jemaat pertama — kemungkinan masih ada jemaat lain yang belum termuat.
+          Gunakan pencarian untuk menemukan jemaat tertentu; pilih/export hanya berlaku untuk yang tampil di sini.
         </p>
       )}
 
@@ -265,18 +306,47 @@ export default function JemaatListPage() {
                       aria-label="Pilih semua di halaman ini"
                     />
                   </TableCheckboxCell>
-                  <TableHead>Nama</TableHead>
-                  <TableHead>Tanggal Bergabung</TableHead>
-                  <TableHead>Skor Keaktifan</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>No</TableHead>
+                  <TableHead
+                    sortable
+                    sortDirection={directionFor('nama')}
+                    onSortAsc={() => handleSort('nama', 'asc')}
+                    onSortDesc={() => handleSort('nama', 'desc')}
+                  >
+                    Nama
+                  </TableHead>
+                  <TableHead
+                    sortable
+                    sortDirection={directionFor('tgl_bergabung')}
+                    onSortAsc={() => handleSort('tgl_bergabung', 'asc')}
+                    onSortDesc={() => handleSort('tgl_bergabung', 'desc')}
+                  >
+                    Tanggal Bergabung
+                  </TableHead>
+                  <TableHead
+                    sortable
+                    sortDirection={directionFor('skor_keaktifan')}
+                    onSortAsc={() => handleSort('skor_keaktifan', 'asc')}
+                    onSortDesc={() => handleSort('skor_keaktifan', 'desc')}
+                  >
+                    Skor Keaktifan
+                  </TableHead>
+                  <TableHead
+                    sortable
+                    sortDirection={directionFor('status_keaktifan')}
+                    onSortAsc={() => handleSort('status_keaktifan', 'asc')}
+                    onSortDesc={() => handleSort('status_keaktifan', 'desc')}
+                  >
+                    Status
+                  </TableHead>
                   <TableHead className="text-right print:hidden">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading && <TableSkeletonRows rows={5} columns={6} />}
+                {isLoading && <TableSkeletonRows rows={5} columns={7} />}
 
                 {!isLoading &&
-                  paginated.map((j) => (
+                  paginated.map((j, i) => (
                     <TableRow key={j.id} selected={selectedIds.has(j.id)}>
                       <TableCheckboxCell className="print:hidden">
                         <input
@@ -286,6 +356,7 @@ export default function JemaatListPage() {
                           aria-label={`Pilih ${j.nama}`}
                         />
                       </TableCheckboxCell>
+                      <TableCell className="text-slate-500">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
                       <TableCell className="font-medium text-slate-800">{j.nama}</TableCell>
                       <TableCell className="text-slate-600">{formatTanggal(j.tgl_bergabung)}</TableCell>
                       <TableCell className="text-slate-600">{j.skor_keaktifan ?? '-'}</TableCell>
@@ -293,9 +364,12 @@ export default function JemaatListPage() {
                         <StatusKeaktifanBadge status={j.status_keaktifan} />
                       </TableCell>
                       <TableCell className="text-right print:hidden">
-                        <Link to={`/jemaat/${j.id}`} className="text-sm font-medium text-accent-from hover:underline">
-                          Lihat detail
-                        </Link>
+                        <Button asChild variant="outline" size="sm">
+                          <Link to={`/jemaat/${j.id}`}>
+                            <Eye className="h-3.5 w-3.5" />
+                            Detail
+                          </Link>
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -331,38 +405,31 @@ export default function JemaatListPage() {
                     <span className="text-slate-500">
                       Skor: <span className="font-medium text-slate-700">{j.skor_keaktifan ?? '-'}</span>
                     </span>
-                    <Link to={`/jemaat/${j.id}`} className="font-medium text-accent-from hover:underline">
-                      Lihat detail
-                    </Link>
+                    <Button asChild variant="outline" size="sm">
+                      <Link to={`/jemaat/${j.id}`}>
+                        <Eye className="h-3.5 w-3.5" />
+                        Detail
+                      </Link>
+                    </Button>
                   </div>
                 </div>
               ))}
           </div>
 
           {filtered.length > 0 && (
-            <div className="flex items-center justify-between pt-2 text-sm text-slate-600 print:hidden">
-              <span>
-                Halaman {page} dari {totalPages} ({filtered.length} jemaat)
-              </span>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  Sebelumnya
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Berikutnya
-                </Button>
-              </div>
-            </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} itemLabel="jemaat" totalItems={filtered.length} />
           )}
         </>
       )}
 
       <JemaatFormModal open={formOpen} onOpenChange={setFormOpen} mode="create" onSuccess={handleCreated} />
+
+      <JemaatExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        ids={Array.from(selectedIds)}
+        filterDescription={exportFilterDescription}
+      />
 
       <ConfirmDialog
         open={bulkConfirmOpen}

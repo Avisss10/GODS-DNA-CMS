@@ -228,6 +228,14 @@ async function assignVolunteer(eventId, { jemaat_id, jenis_id }, { actorUserId =
   if (!jemaat_id) throw new EventError('jemaat_id wajib diisi', 400);
   if (!jenis_id) throw new EventError('jenis_id wajib diisi', 400);
 
+  // Sebelumnya cuma dicek FE (opsi dropdown difilter is_active) — tanpa
+  // ini API bisa dipanggil langsung untuk menugaskan ke jenis yang sudah
+  // dinonaktifkan.
+  const jenis = await volunteerJenisRepository.findById(jenis_id);
+  if (!jenis || !jenis.is_active) {
+    throw new EventError('Jenis volunteer tidak aktif, tidak bisa ditugaskan', 400);
+  }
+
   const membership = await volunteerMemberRepository.findByJemaatAndType(jemaat_id, jenis_id);
   if (!membership || !membership.is_active) {
     throw new EventError('Jemaat tidak terdaftar sebagai volunteer untuk jenis tersebut', 400);

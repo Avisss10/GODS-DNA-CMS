@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { CalendarDays, List, Plus, Search } from 'lucide-react';
@@ -14,6 +14,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
 import ErrorState from '@/components/ErrorState';
 import SavedFiltersBar from '@/components/SavedFiltersBar';
+import Pagination from '@/components/Pagination';
 import { useBulkAction, type BulkActionResult } from '@/hooks/useBulkAction';
 import { useSavedFilters } from '@/hooks/useSavedFilters';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,8 @@ interface EventSavedFilter {
 // PUBLISHED & SELESAI yang boleh berpindah ke DIARSIPKAN.
 const ARCHIVABLE_STATUSES: EventStatus[] = ['PUBLISHED', 'SELESAI'];
 
+const PAGE_SIZE = 12;
+
 const STATUS_FILTER_OPTIONS: { value: EventStatus | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'Semua Status' },
   { value: 'DRAFT', label: 'Draft' },
@@ -54,6 +57,7 @@ export default function EventListPage() {
   const [jenisFilter, setJenisFilter] = useState('ALL');
   const [tanggalFilter, setTanggalFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
@@ -86,6 +90,13 @@ export default function EventListPage() {
   }, [data, statusFilter, jenisFilter, tanggalFilter, search]);
 
   const archivableInView = useMemo(() => filtered.filter((e) => ARCHIVABLE_STATUSES.includes(e.status)), [filtered]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, jenisFilter, tanggalFilter, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function handleCreated() {
     queryClient.invalidateQueries({ queryKey: ['event', 'list'] });
@@ -291,7 +302,7 @@ async function handleConfirmBulkArchive() {
             <EmptyState icon={Search} title="Tidak ada event yang cocok dengan filter" />
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map((ev) => {
+              {paginated.map((ev) => {
                 const variant = getEventStatusVariant(ev.status);
                 const canArchive = ARCHIVABLE_STATUSES.includes(ev.status);
                 return (
@@ -325,6 +336,10 @@ async function handleConfirmBulkArchive() {
                 );
               })}
             </div>
+          )}
+
+          {filtered.length > 0 && (
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} itemLabel="event" totalItems={filtered.length} />
           )}
         </>
       )}

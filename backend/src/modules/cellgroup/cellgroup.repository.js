@@ -127,16 +127,20 @@ async function findActiveMembers(cgId) {
   const pool = getPool();
   // j.nama tersimpan sebagai ciphertext (migration 005) — dekripsi
   // di level aplikasi memakai j.nama_iv sebelum dikembalikan.
+  // is_leader dibandingkan dari cell_group.leader_id terkini, supaya FE
+  // bisa menandai leader di daftar anggota (bukan cuma tampil di kartu info CG).
   const [rows] = await pool.query(
-    `SELECT j.id, j.nama, j.nama_iv, cgm.joined_at
+    `SELECT j.id, j.nama, j.nama_iv, cgm.joined_at, (cg.leader_id = j.id) AS is_leader
      FROM cell_group_members cgm
      JOIN jemaat j ON cgm.jemaat_id = j.id
+     JOIN cell_group cg ON cgm.cg_id = cg.id
      WHERE cgm.cg_id = :cgId AND cgm.left_at IS NULL AND j.deleted_at IS NULL`,
     { cgId }
   );
   return rows.map(({ nama_iv, ...row }) => ({
     ...row,
     nama: decryptOptional(row.nama, nama_iv),
+    is_leader: Boolean(row.is_leader),
   }));
 }
 

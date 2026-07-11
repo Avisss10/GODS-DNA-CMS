@@ -17,22 +17,23 @@ const TITLE_BY_JENIS: Record<ReportJenis, string> = {
 interface ReportFormModalProps {
   jenis: ReportJenis | null;
   onOpenChange: (open: boolean) => void;
+  onAsyncReady: (payload: { token: string; message: string }) => void;
 }
 
-export default function ReportFormModal({ jenis, onOpenChange }: ReportFormModalProps) {
+export default function ReportFormModal({ jenis, onOpenChange, onAsyncReady }: ReportFormModalProps) {
   return (
     <Dialog open={jenis !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         {jenis && (
           <>
             <DialogHeader>
               <DialogTitle>{TITLE_BY_JENIS[jenis]}</DialogTitle>
             </DialogHeader>
-            {jenis === 'jemaat' && <JemaatReportForm />}
-            {jenis === 'event' && <EventReportForm />}
-            {jenis === 'cg' && <CgReportForm />}
-            {jenis === 'volunteer' && <VolunteerReportForm />}
-            {jenis === 'analytics' && <AnalyticsReportForm />}
+            {jenis === 'jemaat' && <JemaatReportForm onAsyncReady={onAsyncReady} />}
+            {jenis === 'event' && <EventReportForm onAsyncReady={onAsyncReady} />}
+            {jenis === 'cg' && <CgReportForm onAsyncReady={onAsyncReady} />}
+            {jenis === 'volunteer' && <VolunteerReportForm onAsyncReady={onAsyncReady} />}
+            {jenis === 'analytics' && <AnalyticsReportForm onAsyncReady={onAsyncReady} />}
           </>
         )}
       </DialogContent>

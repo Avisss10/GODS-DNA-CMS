@@ -33,11 +33,11 @@ describe('cellgroup.controller — submitAbsensi + trigger skor real-time (Unit 
     const res = buildMockRes();
 
     await submitAbsensi(
-      { params: { meetingId: '9' }, body: { absensi }, user: { userId: 7 } },
+      { params: { meetingId: '9' }, body: { absensi }, user: { userId: 7, peran: 'LEADER' } },
       res
     );
 
-    expect(cgService.submitAbsensi).toHaveBeenCalledWith(9, absensi, { actorUserId: 7 });
+    expect(cgService.submitAbsensi).toHaveBeenCalledWith(9, absensi, { actorUserId: 7, actorRole: 'LEADER' });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(scoringService.triggerSkorUpdate).toHaveBeenCalledWith([1, 2], { actorUserId: 7 });
 

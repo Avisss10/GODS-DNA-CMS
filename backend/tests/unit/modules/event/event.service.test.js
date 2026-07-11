@@ -57,6 +57,10 @@ beforeEach(() => {
   eventVolunteerRepository.countActiveByEventAndJenis.mockResolvedValue(0);
   eventVolunteerRepository.countTugas30HariBatch.mockResolvedValue({});
   eventVolunteerRepository.findConflictingJemaatIds.mockResolvedValue([]);
+  // Default: jenis volunteer ditemukan & aktif — supaya test assignVolunteer
+  // yang tidak spesifik menguji status jenis tetap lolos ke pengecekan
+  // berikutnya (membership/kuota/dst), bukan keblok di awal.
+  volunteerJenisRepository.findById.mockResolvedValue({ id: 3, is_active: true });
 });
 
 // ── createEvent ───────────────────────────────────────────────────
@@ -277,6 +281,22 @@ describe('event.service — assignVolunteer (Unit Test)', () => {
     expect(result.id).toBe(7);
     // DRAFT belum AKTIF — tidak boleh insert attendance
     expect(eventAttendancesRepository.insertAttendance).not.toHaveBeenCalled();
+  });
+
+  it('harus 400 jika jenis volunteer tidak ditemukan', async () => {
+    eventRepository.findById.mockResolvedValue({ id: 1, status: 'PUBLISHED' });
+    volunteerJenisRepository.findById.mockResolvedValue(null);
+    await expect(assignVolunteer(1, { jemaat_id: 2, jenis_id: 999 }))
+      .rejects.toMatchObject({ statusCode: 400 });
+    expect(volunteerMemberRepository.findByJemaatAndType).not.toHaveBeenCalled();
+  });
+
+  it('harus 400 jika jenis volunteer sudah dinonaktifkan', async () => {
+    eventRepository.findById.mockResolvedValue({ id: 1, status: 'PUBLISHED' });
+    volunteerJenisRepository.findById.mockResolvedValue({ id: 3, is_active: false });
+    await expect(assignVolunteer(1, { jemaat_id: 2, jenis_id: 3 }))
+      .rejects.toMatchObject({ statusCode: 400 });
+    expect(volunteerMemberRepository.findByJemaatAndType).not.toHaveBeenCalled();
   });
 
   it('harus 400 jika jemaat tidak terdaftar sebagai volunteer jenis tersebut', async () => {

@@ -5,6 +5,7 @@ import type {
   UpdateVolunteerTypeInput,
   VolunteerTypeListItem,
 } from '@/types/volunteer.types';
+import type { VolunteerTypeMember } from '@/types/event.types';
 
 // Re-export supaya import lama (mis. JemaatDetailPage) yang mengambil tipe
 // dari file ini tetap jalan tanpa perlu diubah.
@@ -52,6 +53,14 @@ export async function deactivateVolunteerType(id: number): Promise<{ message: st
 // Sukses -> { message: 'Jenis volunteer berhasil diaktifkan kembali' }.
 export async function activateVolunteerType(id: number): Promise<{ message: string }> {
   const { data } = await api.patch<{ message: string }>(`/volunteer-types/${id}/activate`);
+  return data;
+}
+
+// Anggota aktif sebuah jenis volunteer — dipakai halaman detail jenis
+// volunteer. Endpoint sama dengan yang dipakai modul Event untuk
+// pencarian manual saat "Tugaskan" (lihat event.api.ts).
+export async function getVolunteerTypeMembers(volunteerTypeId: number): Promise<VolunteerTypeMember[]> {
+  const { data } = await api.get<VolunteerTypeMember[]>(`/volunteer-types/${volunteerTypeId}/members`);
   return data;
 }
 

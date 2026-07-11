@@ -81,12 +81,14 @@ describe('cellgroup-meeting.repository — findActiveMembersAtMeetingTime (Unit 
     expect(sql).toMatch(/left_at IS NULL OR cgm\.left_at > :waktuMeeting/);
   });
 
-  it('harus mengembalikan daftar anggota', async () => {
-    const mockMembers = [{ id: 1, nama: 'Budi' }];
-    const mockPool = { query: jest.fn().mockResolvedValue([mockMembers]) };
+  it('harus mengembalikan daftar anggota dengan flag is_leader', async () => {
+    const rawRows = [{ id: 1, nama: 'Budi', is_leader: 1 }];
+    const mockPool = { query: jest.fn().mockResolvedValue([rawRows]) };
     getPool.mockReturnValue(mockPool);
 
-    expect(await repo.findActiveMembersAtMeetingTime(1, '2026-06-20 19:00:00')).toEqual(mockMembers);
+    expect(await repo.findActiveMembersAtMeetingTime(1, '2026-06-20 19:00:00')).toEqual([
+      { id: 1, nama: 'Budi', is_leader: true },
+    ]);
   });
 });
 

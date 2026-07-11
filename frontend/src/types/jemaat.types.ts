@@ -20,9 +20,6 @@ export interface JemaatListItem {
 
 export interface MediaSosial {
   instagram?: string;
-  facebook?: string;
-  whatsapp?: string;
-  [key: string]: string | undefined;
 }
 
 // GET /jemaat/:id/full — semua field plaintext (BAGIAN 2.2 backend)
@@ -42,6 +39,8 @@ export interface JemaatFull {
   skor_keaktifan: number | null;
   status_keaktifan: StatusKeaktifan;
   created_at: string;
+  // Cell Group aktif yang dipimpin jemaat ini (kosong kalau bukan leader).
+  leading_cell_groups: { id: number; nama: string }[];
 }
 
 export interface DuplicateCandidate {
@@ -72,14 +71,6 @@ export interface JemaatDependencies {
   activeMemberOfCg: CgDependency[];
 }
 
-export interface JemaatCellGroup {
-  id: number;
-  nama: string;
-  deskripsi: string | null;
-  is_active: boolean;
-  joined_at: string;
-}
-
 export interface JemaatEventHistory {
   id: number;
   judul: string;
@@ -88,6 +79,35 @@ export interface JemaatEventHistory {
   waktu_selesai: string;
   status: string;
   hadir_at: string;
+}
+
+// GET /jemaat/:id/cell-groups belum ada padanan endpoint riwayat kehadiran
+// meeting CG — ini dia: dari cg_absensi (hadir = TRUE), dipakai Timeline
+// Aktivitas supaya selaras dengan sumber data skoring keaktifan.
+export interface JemaatCgAttendance {
+  meeting_id: number;
+  judul: string;
+  jenis: string;
+  waktu_mulai: string;
+  waktu_selesai: string;
+  cg_id: number;
+  nama_cg: string;
+}
+
+// GET /jemaat/:id/volunteer-assignments — penugasan event_volunteer per
+// jemaat (BEDA dari registrasi jenis volunteer di JemaatVolunteerHistory),
+// semua status (AKTIF/BERTUGAS_PARSIAL/DIGANTIKAN/DIBATALKAN).
+export interface JemaatVolunteerAssignment {
+  id: number;
+  event_id: number;
+  judul: string;
+  event_jenis: string;
+  waktu_mulai: string;
+  waktu_selesai: string;
+  nama_jenis_volunteer: string;
+  status: 'AKTIF' | 'BERTUGAS_PARSIAL' | 'DIGANTIKAN' | 'DIBATALKAN';
+  durasi_menit: number | null;
+  created_at: string;
 }
 
 export interface JemaatVolunteerHistory {

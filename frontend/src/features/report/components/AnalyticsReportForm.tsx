@@ -1,12 +1,14 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { generateAnalyticsReport } from '../report.api';
+import { generateAnalyticsReport, previewAnalyticsReport } from '../report.api';
 import { useReportGenerator } from '../report.hooks';
 import type { ReportFormat } from '@/types/report.types';
 import FormatSelect from './FormatSelect';
 import ReportGenerateStatus from './ReportGenerateStatus';
+import ReportPreviewTable from './ReportPreviewTable';
 
 const BULAN_OPTIONS = [
   { value: 1, label: 'Januari' },
@@ -23,15 +25,24 @@ const BULAN_OPTIONS = [
   { value: 12, label: 'Desember' },
 ];
 
-export default function AnalyticsReportForm() {
+interface AnalyticsReportFormProps {
+  onAsyncReady?: (payload: { token: string; message: string }) => void;
+}
+
+export default function AnalyticsReportForm({ onAsyncReady }: AnalyticsReportFormProps) {
   const [bulan, setBulan] = useState(12);
   const [format, setFormat] = useState<ReportFormat>('xlsx');
-  const { stage, asyncToken, asyncMessage, run } = useReportGenerator();
+  const { stage, asyncToken, asyncMessage, run } = useReportGenerator({ onAsyncReady });
 
-  const isBusy = stage === 'preparing' || stage === 'processing';
+  const isBusy = stage === 'processing';
+
+  const previewQuery = useQuery({
+    queryKey: ['report-preview', 'analytics', bulan],
+    queryFn: () => previewAnalyticsReport({ bulan }),
+  });
 
   function handleGenerate() {
-    run(() => generateAnalyticsReport({ bulan, format }));
+    run(() => generateAnalyticsReport({ bulan, format, filterDescription: `Rentang: ${bulan} bulan terakhir` }));
   }
 
   return (
@@ -52,14 +63,22 @@ export default function AnalyticsReportForm() {
         </select>
       </div>
 
+      <ReportPreviewTable
+        columns={previewQuery.data?.columns ?? []}
+        rows={previewQuery.data?.rows ?? []}
+        total={previewQuery.data?.total ?? 0}
+        isLoading={previewQuery.isLoading}
+        isError={previewQuery.isError}
+      />
+
       <FormatSelect value={format} onChange={setFormat} disabled={isBusy} />
 
       <Button type="button" onClick={handleGenerate} disabled={isBusy} className="w-full">
         {isBusy && <Loader2 className="h-4 w-4 animate-spin" />}
-        Generate Laporan
+        Export
       </Button>
 
-      <ReportGenerateStatus stage={stage} asyncToken={asyncToken} asyncMessage={asyncMessage} />
+      <ReportGenerateStatus stage={stage} asyncToken={asyncToken} asyncMessage={asyncMessage} onRetry={handleGenerate} />
     </div>
   );
 }

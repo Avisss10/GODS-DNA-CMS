@@ -49,6 +49,12 @@ router.patch(
   volunteerController.activateVolunteerType
 );
 
+router.get(
+  '/volunteer-types/:id/members',
+  authenticate,
+  volunteerController.listVolunteerTypeMembers
+);
+
 // ── Jemaat ↔ Volunteer (registrasi) ──────────────────────────────
 router.get(
   '/jemaat/:jemaatId/volunteer',

@@ -121,14 +121,19 @@ describe('cellgroup.repository — removeMember (Unit Test)', () => {
 });
 
 describe('cellgroup.repository — findActiveMembers (Unit Test)', () => {
-  it('harus mengembalikan daftar anggota aktif', async () => {
-    const mockMembers = [{ id: 1, nama: 'Budi' }, { id: 2, nama: 'Sari' }];
-    const mockPool = { query: jest.fn().mockResolvedValue([mockMembers]) };
+  it('harus mengembalikan daftar anggota aktif dengan flag is_leader', async () => {
+    // Simulasi row mentah dari MySQL: is_leader hasil perbandingan (cg.leader_id = j.id)
+    // datang sebagai 0/1, dikoersi ke boolean oleh repository.
+    const rawRows = [{ id: 1, nama: 'Budi', is_leader: 1 }, { id: 2, nama: 'Sari', is_leader: 0 }];
+    const mockPool = { query: jest.fn().mockResolvedValue([rawRows]) };
     getPool.mockReturnValue(mockPool);
 
     const result = await repo.findActiveMembers(1);
 
-    expect(result).toEqual(mockMembers);
+    expect(result).toEqual([
+      { id: 1, nama: 'Budi', is_leader: true },
+      { id: 2, nama: 'Sari', is_leader: false },
+    ]);
     expect(mockPool.query.mock.calls[0][0]).toMatch(/left_at IS NULL/);
   });
 });

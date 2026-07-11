@@ -114,6 +114,24 @@ async function listVolunteerTypes(req, res) {
   }
 }
 
+// GET /api/volunteer-types/:id/members — anggota aktif jenis tersebut.
+// Sebelumnya nyasar di modul Event ("Deferred dari Step 12"); dipindah
+// ke sini karena datanya milik modul Volunteer. Path URL tidak berubah,
+// jadi pemakaian existing di modul Event tetap jalan tanpa perlu diubah.
+async function listVolunteerTypeMembers(req, res) {
+  try {
+    const volunteerMemberRepository = require('./volunteer-member.repository');
+    const volunteerJenisRepository = require('./volunteer-jenis.repository');
+    const id = Number(req.params.id);
+    const jenis = await volunteerJenisRepository.findById(id);
+    if (!jenis) return res.status(404).json({ message: 'Jenis volunteer tidak ditemukan' });
+    const members = await volunteerMemberRepository.findActiveByType(id);
+    return res.status(200).json(members);
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
 module.exports = {
   createVolunteerType,
   updateVolunteerType,
@@ -123,4 +141,5 @@ module.exports = {
   listVolunteerByJemaat,
   registerVolunteer,
   unregisterVolunteer,
+  listVolunteerTypeMembers,
 };

@@ -6,18 +6,23 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { listEvents } from '@/features/event/event.api';
 import JemaatSearchSelect from '@/features/cellgroup/components/JemaatSearchSelect';
-import { generateEventReport } from '../report.api';
+import { generateEventReport, previewEventReport } from '../report.api';
 import { useReportGenerator } from '../report.hooks';
 import type { ReportFormat } from '@/types/report.types';
 import FormatSelect from './FormatSelect';
 import ReportGenerateStatus from './ReportGenerateStatus';
+import ReportPreviewTable from './ReportPreviewTable';
 
-export default function EventReportForm() {
+interface EventReportFormProps {
+  onAsyncReady?: (payload: { token: string; message: string }) => void;
+}
+
+export default function EventReportForm({ onAsyncReady }: EventReportFormProps) {
   const [eventId, setEventId] = useState<number | null>(null);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [format, setFormat] = useState<ReportFormat>('xlsx');
-  const { stage, asyncToken, asyncMessage, run } = useReportGenerator();
+  const { stage, asyncToken, asyncMessage, run } = useReportGenerator({ onAsyncReady });
 
   const { data: events, isLoading: eventsLoading } = useQuery({
     queryKey: ['event', 'list'],
@@ -29,7 +34,28 @@ export default function EventReportForm() {
     [events],
   );
 
-  const isBusy = stage === 'preparing' || stage === 'processing';
+  const isBusy = stage === 'processing';
+
+  const previewQuery = useQuery({
+    queryKey: ['report-preview', 'event', eventId, startDate, endDate],
+    queryFn: () =>
+      previewEventReport({
+        eventId: eventId ?? undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+      }),
+  });
+
+  function buildFilterDescription(): string | undefined {
+    const parts: string[] = [];
+    if (eventId != null) {
+      parts.push(`Event: ${eventOptions.find((o) => o.id === eventId)?.label ?? eventId}`);
+    }
+    if (startDate || endDate) {
+      parts.push(`Rentang: ${startDate || '...'} s/d ${endDate || '...'}`);
+    }
+    return parts.length > 0 ? parts.join('; ') : undefined;
+  }
 
   function handleGenerate() {
     run(() =>
@@ -38,6 +64,7 @@ export default function EventReportForm() {
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         format,
+        filterDescription: buildFilterDescription(),
       }),
     );
   }
@@ -68,14 +95,22 @@ export default function EventReportForm() {
         </div>
       </div>
 
+      <ReportPreviewTable
+        columns={previewQuery.data?.columns ?? []}
+        rows={previewQuery.data?.rows ?? []}
+        total={previewQuery.data?.total ?? 0}
+        isLoading={previewQuery.isLoading}
+        isError={previewQuery.isError}
+      />
+
       <FormatSelect value={format} onChange={setFormat} disabled={isBusy} />
 
       <Button type="button" onClick={handleGenerate} disabled={isBusy} className="w-full">
         {isBusy && <Loader2 className="h-4 w-4 animate-spin" />}
-        Generate Laporan
+        Export
       </Button>
 
-      <ReportGenerateStatus stage={stage} asyncToken={asyncToken} asyncMessage={asyncMessage} />
+      <ReportGenerateStatus stage={stage} asyncToken={asyncToken} asyncMessage={asyncMessage} onRetry={handleGenerate} />
     </div>
   );
 }

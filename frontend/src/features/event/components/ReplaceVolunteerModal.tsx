@@ -92,7 +92,7 @@ export default function ReplaceVolunteerModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => (v ? onOpenChange(v) : resetAndClose())}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Gantikan Volunteer</DialogTitle>
           <DialogDescription>

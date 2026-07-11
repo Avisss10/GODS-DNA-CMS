@@ -242,7 +242,9 @@ async function viewFullJemaat(id, { actorUserId = null } = {}) {
     ...publicFields
   } = decrypted;
 
-  return publicFields;
+  const leading_cell_groups = await jemaatRepository.findLedCellGroups(id);
+
+  return { ...publicFields, leading_cell_groups };
 }
 
 module.exports = {

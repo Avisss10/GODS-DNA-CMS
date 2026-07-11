@@ -17,7 +17,12 @@ describe('config/database — getPool (Unit Test)', () => {
     jest.clearAllMocks();
     await closePool();
 
-    mockPoolInstance = { end: jest.fn().mockResolvedValue(), getConnection: jest.fn() };
+    mockPoolInstance = {
+      end: jest.fn().mockResolvedValue(),
+      getConnection: jest.fn(),
+      query: jest.fn(),
+      on: jest.fn(),
+    };
     mysql.createPool = jest.fn().mockReturnValue(mockPoolInstance);
 
     delete process.env.DB_SSL_CA_PATH;
@@ -74,6 +79,87 @@ describe('config/database — getPool (Unit Test)', () => {
       expect.objectContaining({ connectionLimit: 20 })
     );
   });
+
+  it('harus mengaktifkan keepalive & connectTimeout (fix ECONNRESET koneksi idle)', () => {
+    getPool();
+    expect(mysql.createPool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 10000,
+        connectTimeout: 10000,
+      })
+    );
+  });
+
+  it('harus mendaftarkan listener error di pool', () => {
+    getPool();
+    expect(mockPoolInstance.on).toHaveBeenCalledWith('error', expect.any(Function));
+  });
+});
+
+describe('config/database — retry query pada error koneksi transien (Unit Test)', () => {
+  let mockPoolInstance;
+  let existsSyncSpy;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    await closePool();
+    mockPoolInstance = { end: jest.fn().mockResolvedValue(), getConnection: jest.fn(), on: jest.fn() };
+    existsSyncSpy = jest.spyOn(fs, 'existsSync').mockReturnValue(false);
+    delete process.env.DB_SSL_CA_PATH;
+    process.env.DB_HOST = 'localhost';
+    process.env.DB_NAME = 'gods_dna_cms_test';
+  });
+
+  afterEach(async () => {
+    existsSyncSpy.mockRestore();
+    await closePool();
+  });
+
+  it('harus retry sekali dan berhasil kalau gagal pertama karena ECONNRESET', async () => {
+    const err = Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' });
+    // getPool() mengganti mockPoolInstance.query dengan wrapper-nya sendiri —
+    // simpan referensi jest.fn() ASLI dulu supaya assertion .toHaveBeenCalledTimes
+    // tetap mengacu ke mock, bukan ke fungsi wrapper yang menimpanya.
+    const originalQueryMock = jest.fn()
+      .mockRejectedValueOnce(err)
+      .mockResolvedValueOnce([[{ ok: 1 }]]);
+    mockPoolInstance.query = originalQueryMock;
+    mysql.createPool = jest.fn().mockReturnValue(mockPoolInstance);
+
+    const pool = getPool();
+    const result = await pool.query('SELECT 1');
+
+    expect(result).toEqual([[{ ok: 1 }]]);
+    expect(originalQueryMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('tidak boleh retry untuk error non-koneksi (mis. syntax SQL) — langsung dilempar', async () => {
+    const err = Object.assign(new Error('SQL syntax error'), { code: 'ER_PARSE_ERROR' });
+    const originalQueryMock = jest.fn().mockRejectedValue(err);
+    mockPoolInstance.query = originalQueryMock;
+    mysql.createPool = jest.fn().mockReturnValue(mockPoolInstance);
+
+    const pool = getPool();
+
+    await expect(pool.query('SELECT bad')).rejects.toThrow('SQL syntax error');
+    expect(originalQueryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('kalau retry juga gagal, error dari percobaan kedua yang dilempar (bukan retry berulang)', async () => {
+    const err1 = Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' });
+    const err2 = Object.assign(new Error('read ECONNRESET lagi'), { code: 'ECONNRESET' });
+    const originalQueryMock = jest.fn()
+      .mockRejectedValueOnce(err1)
+      .mockRejectedValueOnce(err2);
+    mockPoolInstance.query = originalQueryMock;
+    mysql.createPool = jest.fn().mockReturnValue(mockPoolInstance);
+
+    const pool = getPool();
+
+    await expect(pool.query('SELECT 1')).rejects.toThrow('read ECONNRESET lagi');
+    expect(originalQueryMock).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('config/database — testConnection (Unit Test)', () => {
@@ -101,6 +187,8 @@ describe('config/database — testConnection (Unit Test)', () => {
     const mockPoolInstance = {
       getConnection: jest.fn().mockResolvedValue(mockConnection),
       end: jest.fn().mockResolvedValue(),
+      query: jest.fn(),
+      on: jest.fn(),
     };
     mysql.createPool = jest.fn().mockReturnValue(mockPoolInstance);
 
@@ -119,6 +207,8 @@ describe('config/database — testConnection (Unit Test)', () => {
     const mockPoolInstance = {
       getConnection: jest.fn().mockResolvedValue(mockConnection),
       end: jest.fn().mockResolvedValue(),
+      query: jest.fn(),
+      on: jest.fn(),
     };
     mysql.createPool = jest.fn().mockReturnValue(mockPoolInstance);
 
@@ -145,7 +235,12 @@ describe('config/database — closePool (Unit Test)', () => {
   });
 
   it('harus memanggil pool.end() jika pool sudah dibuat', async () => {
-    const mockPoolInstance = { end: jest.fn().mockResolvedValue(), getConnection: jest.fn() };
+    const mockPoolInstance = {
+      end: jest.fn().mockResolvedValue(),
+      getConnection: jest.fn(),
+      query: jest.fn(),
+      on: jest.fn(),
+    };
     mysql.createPool = jest.fn().mockReturnValue(mockPoolInstance);
 
     getPool();
@@ -221,7 +316,11 @@ describe('config/database — getPool dengan SSL (Unit Test)', () => {
     process.env.DB_SSL_CA_PATH = 'src/config/certs/ca.pem';
     existsSyncSpy = jest.spyOn(fs, 'existsSync').mockReturnValue(true);
     readFileSyncSpy = jest.spyOn(fs, 'readFileSync').mockReturnValue('fake-ca');
-    mysql.createPool = jest.fn().mockReturnValue({ end: jest.fn().mockResolvedValue() });
+    mysql.createPool = jest.fn().mockReturnValue({
+      end: jest.fn().mockResolvedValue(),
+      query: jest.fn(),
+      on: jest.fn(),
+    });
 
     getPool();
 
@@ -235,7 +334,11 @@ describe('config/database — getPool dengan SSL (Unit Test)', () => {
   it('tidak boleh menyertakan key ssl di createPool jika DB_SSL_CA_PATH tidak diset', () => {
     delete process.env.DB_SSL_CA_PATH;
     existsSyncSpy = jest.spyOn(fs, 'existsSync').mockReturnValue(false);
-    mysql.createPool = jest.fn().mockReturnValue({ end: jest.fn().mockResolvedValue() });
+    mysql.createPool = jest.fn().mockReturnValue({
+      end: jest.fn().mockResolvedValue(),
+      query: jest.fn(),
+      on: jest.fn(),
+    });
 
     getPool();
 

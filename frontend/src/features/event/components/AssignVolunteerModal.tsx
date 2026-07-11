@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { toast } from '@/lib/toast';
@@ -27,6 +27,8 @@ interface AssignVolunteerModalProps {
   eventId: number;
   jenisOptions: JenisOption[];
   defaultJenisId?: number;
+  /** Nama jenis untuk defaultJenisId — kalau ada, jenis dikunci sebagai teks (bukan dropdown). */
+  defaultJenisLabel?: string;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }
@@ -38,6 +40,7 @@ export default function AssignVolunteerModal({
   eventId,
   jenisOptions,
   defaultJenisId,
+  defaultJenisLabel,
   onOpenChange,
   onSuccess,
 }: AssignVolunteerModalProps) {
@@ -45,6 +48,19 @@ export default function AssignVolunteerModal({
   const [tab, setTab] = useState<Tab>('manual');
   const [selectedJemaatId, setSelectedJemaatId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Bug lama: jenisId cuma di-derive lewat useState initializer (jalan
+  // sekali saja) — modal dibuka ulang dari card jenis lain masih
+  // menampilkan jenis sebelumnya. Sinkron ulang tiap modal dibuka.
+  useEffect(() => {
+    if (open) {
+      setJenisId(defaultJenisId ?? jenisOptions[0]?.id ?? null);
+    }
+    // jenisOptions sengaja tidak masuk dependency — array baru dibuat tiap
+    // render induk, memasukkannya akan reset pilihan user setiap render
+    // saat modal terbuka, bukan cuma saat benar-benar dibuka.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultJenisId]);
 
   const membersQuery = useQuery({
     queryKey: ['volunteer-type', jenisId, 'members'],
@@ -93,7 +109,7 @@ export default function AssignVolunteerModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => (v ? onOpenChange(v) : resetAndClose())}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Tugaskan Volunteer</DialogTitle>
           <DialogDescription>Pilih jenis pelayanan, lalu tugaskan jemaat secara manual atau pakai rekomendasi.</DialogDescription>
@@ -101,21 +117,29 @@ export default function AssignVolunteerModal({
 
         <div>
           <Label>Jenis Volunteer *</Label>
-          <select
-            value={jenisId ?? ''}
-            onChange={(e) => {
-              setJenisId(Number(e.target.value));
-              setSelectedJemaatId(null);
-            }}
-            className="mt-1 h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
-            {jenisOptions.length === 0 && <option value="">Tidak ada jenis volunteer aktif</option>}
-            {jenisOptions.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+          {defaultJenisId ? (
+            // Sudah dipilih lewat tombol "Tugaskan" di card jenis tsb —
+            // tidak perlu dropdown lagi, cukup tampilkan sebagai teks tetap.
+            <p className="mt-1 flex h-9 items-center rounded-md border border-input bg-slate-50 px-3 text-sm text-slate-700">
+              {defaultJenisLabel ?? jenisOptions.find((o) => o.id === defaultJenisId)?.label ?? '-'}
+            </p>
+          ) : (
+            <select
+              value={jenisId ?? ''}
+              onChange={(e) => {
+                setJenisId(Number(e.target.value));
+                setSelectedJemaatId(null);
+              }}
+              className="mt-1 h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {jenisOptions.length === 0 && <option value="">Tidak ada jenis volunteer aktif</option>}
+              {jenisOptions.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div className="flex rounded-card border border-slate-200 p-0.5">

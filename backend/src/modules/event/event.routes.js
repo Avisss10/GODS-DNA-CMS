@@ -27,7 +27,4 @@ router.get('/events/:id/volunteer-needs', authenticate, eventController.getVolun
 router.put('/events/:id/volunteer-needs', authenticate, requireRole('ADMIN', 'LEADER'), eventController.updateVolunteerNeeds);
 router.get('/events/:id/suggest-volunteers/:jenisId', authenticate, eventController.suggestVolunteers);
 
-// Deferred dari Step 12
-router.get('/volunteer-types/:id/members', authenticate, eventController.listVolunteerTypeMembers);
-
 module.exports = router;

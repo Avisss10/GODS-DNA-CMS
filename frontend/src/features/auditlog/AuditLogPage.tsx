@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useSort, type SortExtractors } from '@/hooks/useSort';
 import { listAuditLogs, type AuditLogFilterParams, type AuditLogItem } from './auditlog.api';
 import { AKSI_OPTIONS, MODUL_OPTIONS } from './auditlog.constants';
 import AuditLogDiffModal from './components/AuditLogDiffModal';
@@ -21,6 +22,12 @@ const SELECT_CLASS =
 
 const EMPTY_FILTERS: AuditLogFilterParams = {
   modul: '', aksi: '', userId: '', objectId: '', startDate: '', endDate: '',
+};
+
+const AUDIT_LOG_SORT_EXTRACTORS: SortExtractors<AuditLogItem> = {
+  modul: (r) => r.modul,
+  aksi: (r) => r.aksi,
+  created_at: (r) => r.created_at,
 };
 
 export default function AuditLogPage() {
@@ -33,6 +40,7 @@ export default function AuditLogPage() {
   });
 
   const items = data ?? [];
+  const { sorted: sortedItems, handleSort, directionFor } = useSort(items, AUDIT_LOG_SORT_EXTRACTORS);
   const hasActiveFilter = Object.values(filters).some((v) => v);
 
   function updateFilter<K extends keyof AuditLogFilterParams>(key: K, value: AuditLogFilterParams[K]) {
@@ -104,22 +112,45 @@ export default function AuditLogPage() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
+                  <TableHead>No</TableHead>
                   <TableHead>ID</TableHead>
-                  <TableHead>Modul</TableHead>
-                  <TableHead>Aksi</TableHead>
+                  <TableHead
+                    sortable
+                    sortDirection={directionFor('modul')}
+                    onSortAsc={() => handleSort('modul', 'asc')}
+                    onSortDesc={() => handleSort('modul', 'desc')}
+                  >
+                    Modul
+                  </TableHead>
+                  <TableHead
+                    sortable
+                    sortDirection={directionFor('aksi')}
+                    onSortAsc={() => handleSort('aksi', 'asc')}
+                    onSortDesc={() => handleSort('aksi', 'desc')}
+                  >
+                    Aksi
+                  </TableHead>
                   <TableHead>Object ID</TableHead>
                   <TableHead>User ID</TableHead>
-                  <TableHead>Waktu</TableHead>
+                  <TableHead
+                    sortable
+                    sortDirection={directionFor('created_at')}
+                    onSortAsc={() => handleSort('created_at', 'asc')}
+                    onSortDesc={() => handleSort('created_at', 'desc')}
+                  >
+                    Waktu
+                  </TableHead>
                   <TableHead className="text-center">Integritas</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((row) => (
+                {sortedItems.map((row, i) => (
                   <TableRow
                     key={row.id}
                     onClick={() => setSelectedItem(row)}
                     className="cursor-pointer"
                   >
+                    <TableCell className="text-slate-500">{i + 1}</TableCell>
                     <TableCell className="text-slate-500">{row.id}</TableCell>
                     <TableCell className="font-medium text-slate-800">{row.modul}</TableCell>
                     <TableCell className="text-slate-600">{row.aksi}</TableCell>
@@ -141,7 +172,7 @@ export default function AuditLogPage() {
 
           {/* Mobile: card-list, tetap bisa diklik untuk buka diff modal */}
           <div className="space-y-2 sm:hidden">
-            {items.map((row) => (
+            {sortedItems.map((row) => (
               <button
                 key={row.id}
                 type="button"

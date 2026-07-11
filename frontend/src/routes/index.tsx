@@ -10,6 +10,7 @@ import CellGroupListPage from '@/features/cellgroup/CellGroupListPage';
 import CellGroupDetailPage from '@/features/cellgroup/CellGroupDetailPage';
 import MeetingDetailPage from '@/features/cellgroup/MeetingDetailPage';
 import VolunteerTypeListPage from '@/features/volunteer/VolunteerTypeListPage';
+import VolunteerTypeDetailPage from '@/features/volunteer/VolunteerTypeDetailPage';
 import EventListPage from '@/features/event/EventListPage';
 import EventDetailPage from '@/features/event/EventDetailPage';
 import ReportPage from '@/features/report/ReportPage';
@@ -39,6 +40,11 @@ export const router = createBrowserRouter([
           { path: '/event', element: <EventListPage />, handle: { title: 'Event' } },
           { path: '/event/:id', element: <EventDetailPage />, handle: { title: 'Detail Event' } },
           { path: '/volunteer', element: <VolunteerTypeListPage />, handle: { title: 'Volunteer' } },
+          {
+            path: '/volunteer/:id',
+            element: <VolunteerTypeDetailPage />,
+            handle: { title: 'Detail Jenis Volunteer' },
+          },
           { path: '/report', element: <ReportPage />, handle: { title: 'Report' } },
           {
             element: <ProtectedRoute allowedRoles={['LEADER']} />,

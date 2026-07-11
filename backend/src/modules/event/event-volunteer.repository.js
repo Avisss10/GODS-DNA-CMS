@@ -181,6 +181,35 @@ async function findConflictingJemaatIds({ waktuMulai, waktuSelesai, excludeEvent
   return rows.map((r) => r.jemaat_id);
 }
 
+/**
+ * Riwayat penugasan volunteer seorang jemaat di berbagai event, SEMUA
+ * status (AKTIF/BERTUGAS_PARSIAL/DIGANTIKAN/DIBATALKAN) — dipakai
+ * Timeline Aktivitas di Jemaat Detail Page agar selaras dengan sumber
+ * data yang dipakai scoring (lihat scoring.repository.js
+ * getVolunteerAssignments, yang hanya mengambil status
+ * AKTIF/BERTUGAS_PARSIAL untuk hitung skor; endpoint ini sengaja
+ * mengembalikan SEMUA status untuk ditampilkan dengan badge berbeda).
+ *
+ * @param {number} jemaatId
+ * @param {{ limit?: number, offset?: number }} options
+ * @returns {Promise<Array<object>>}
+ */
+async function findByJemaatId(jemaatId, { limit = 50, offset = 0 } = {}) {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    `SELECT ev.id, ev.event_id, e.judul, e.jenis AS event_jenis, e.waktu_mulai, e.waktu_selesai,
+            vj.nama AS nama_jenis_volunteer, ev.status, ev.durasi_menit, ev.created_at
+     FROM event_volunteer ev
+     JOIN event e ON ev.event_id = e.id
+     JOIN volunteer_jenis vj ON ev.jenis_id = vj.id
+     WHERE ev.jemaat_id = :jemaatId
+     ORDER BY e.waktu_mulai DESC
+     LIMIT :limit OFFSET :offset`,
+    { jemaatId, limit: Number(limit), offset: Number(offset) }
+  );
+  return rows;
+}
+
 module.exports = {
   assign,
   findActiveByEvent,
@@ -192,4 +221,5 @@ module.exports = {
   countActiveByEventAndJenis,
   countTugas30HariBatch,
   findConflictingJemaatIds,
+  findByJemaatId,
 };

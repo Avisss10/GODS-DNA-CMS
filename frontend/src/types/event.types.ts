@@ -132,7 +132,8 @@ export interface SuggestedVolunteer {
   composite_score: number;
 }
 
-// GET /volunteer-types/:id/members — dipakai utk cari manual saat assign
+// GET /volunteer-types/:id/members — dipakai utk cari manual saat assign,
+// dan halaman detail jenis volunteer (modul Volunteer).
 export interface VolunteerTypeMember {
   id: number;
   jemaat_id: number;
@@ -140,4 +141,5 @@ export interface VolunteerTypeMember {
   is_new_member: boolean;
   skor_keaktifan: number | null;
   status_keaktifan: string;
+  joined_at: string;
 }

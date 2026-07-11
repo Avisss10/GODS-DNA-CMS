@@ -4,6 +4,7 @@ import { isAxiosError } from 'axios';
 import { toast } from '@/lib/toast';
 import { Loader2, Plus, UserMinus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import EmptyState from '@/components/EmptyState';
 import {
@@ -125,19 +126,26 @@ export default function MembersSection({ cgId, onMembersChanged }: MembersSectio
           {membersQuery.data!.map((m) => (
             <li key={m.id} className="flex items-center justify-between px-4 py-3 text-sm">
               <div>
-                <p className="font-medium text-slate-800">{m.nama}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-slate-800">{m.nama}</p>
+                  {m.is_leader && <Badge className="gap-1">Leader</Badge>}
+                </div>
                 <p className="text-xs text-slate-400">
                   Bergabung {new Date(m.joined_at).toLocaleDateString('id-ID')}
                 </p>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                onClick={() => setRemoveTarget({ id: m.id, nama: m.nama })}
-              >
-                <UserMinus className="h-4 w-4" /> Keluarkan
-              </Button>
+              {/* Leader tidak bisa dikeluarkan dari anggota (backend 409) —
+                  ganti leader dulu lewat Edit Cell Group. */}
+              {!m.is_leader && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => setRemoveTarget({ id: m.id, nama: m.nama })}
+                >
+                  <UserMinus className="h-4 w-4" /> Keluarkan
+                </Button>
+              )}
             </li>
           ))}
         </ul>

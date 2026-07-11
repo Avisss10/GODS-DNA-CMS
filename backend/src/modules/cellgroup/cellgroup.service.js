@@ -4,6 +4,7 @@ const cgRepository = require('./cellgroup.repository');
 const meetingRepository = require('./cellgroup-meeting.repository');
 const { compressToTargetSize } = require('./image-compression.util');
 const { recordAuditLog } = require('../auditlog/auditlog.repository');
+const { getPool } = require('../../config/database');
 
 const MAX_PHOTOS_PER_MEETING = 5; // BAGIAN 3.3 — diturunkan dari 10 ke 5
 const UPLOADS_ROOT = path.resolve(__dirname, '../../../uploads');
@@ -87,6 +88,10 @@ async function removeMemberFromCg(cgId, jemaatId, { actorUserId = null } = {}) {
     throw new CellGroupError('Cell Group tidak ditemukan', 404);
   }
 
+  if (cg.leader_id === jemaatId) {
+    throw new CellGroupError('Leader tidak bisa dikeluarkan dari anggota, ganti leader terlebih dahulu', 409);
+  }
+
   await cgRepository.removeMember(cgId, jemaatId);
 
   await recordAuditLog({
@@ -110,9 +115,18 @@ async function removeMemberFromCg(cgId, jemaatId, { actorUserId = null } = {}) {
  * @throws {CellGroupError} 400 jika CG tidak punya leader aktif
  */
 async function createMeeting(data, { actorUserId = null } = {}) {
+  const cg = await cgRepository.findById(data.cgId);
+  if (!cg) {
+    throw new CellGroupError('Cell Group tidak ditemukan', 404);
+  }
+
   const activeLeader = await cgRepository.findActiveLeader(data.cgId);
   if (!activeLeader) {
     throw new CellGroupError('Tunjuk leader baru terlebih dahulu', 400);
+  }
+
+  if (new Date(data.waktuSelesai) <= new Date(data.waktuMulai)) {
+    throw new CellGroupError('waktuSelesai harus setelah waktuMulai', 400);
   }
 
   const id = await meetingRepository.createMeeting({ ...data, createdBy: actorUserId });
@@ -130,42 +144,72 @@ async function createMeeting(data, { actorUserId = null } = {}) {
 }
 
 /**
- * Menambahkan foto dokumentasi meeting, dengan kompresi otomatis
- * ke target 500KB (BAGIAN 3.3) dan validasi maks 10 foto.
+ * Menambahkan SATU BATCH foto dokumentasi meeting sekaligus (bisa lebih
+ * dari 1 file dalam satu request), dengan kompresi otomatis ke target
+ * 500KB (BAGIAN 3.3) dan validasi maks MAX_PHOTOS_PER_MEETING foto.
+ *
+ * Aturan akses sama seperti submitAbsensi (dikonfirmasi user, foto &
+ * absensi sama-sama "sekali setelah meeting selesai"): hanya bisa upload
+ * setelah waktu_selesai lewat (tanpa batas atas). Batch PERTAMA (belum
+ * ada foto sama sekali) boleh ADMIN maupun LEADER; begitu sudah ada foto
+ * tersimpan, batch berikutnya HANYA boleh LEADER. Gate dicek SEKALI di
+ * awal batch (bukan per file) — supaya upload 3 foto sekaligus tidak
+ * saling memblokir gara-gara foto pertama "sudah tersimpan" di
+ * pertengahan proses.
  *
  * @param {number} meetingId
- * @param {Buffer} fileBuffer - buffer gambar asli (sebelum kompresi)
+ * @param {Buffer[]} fileBuffers - buffer gambar asli (sebelum kompresi), 1+ file
  * @param {object} options
  * @param {number} options.actorUserId
- * @returns {Promise<{ id: number, sizeKb: number }>}
- * @throws {CellGroupError} 404 jika meeting tidak ada, 400 jika sudah 10 foto
+ * @param {string} options.actorRole - 'ADMIN' | 'LEADER'
+ * @returns {Promise<Array<{ id: number, sizeKb: number }>>}
+ * @throws {CellGroupError} 404 meeting tidak ada, 400 belum selesai/kuota lebih, 403 bukan Leader saat sudah ada foto
  */
-async function addPhotoToMeeting(meetingId, fileBuffer, { actorUserId = null } = {}) {
+async function addPhotosToMeeting(meetingId, fileBuffers, { actorUserId = null, actorRole = null } = {}) {
   const meeting = await meetingRepository.findMeetingById(meetingId);
   if (!meeting) {
     throw new CellGroupError('Meeting tidak ditemukan', 404);
   }
 
-  const currentCount = await meetingRepository.countMeetingPhotos(meetingId);
-  if (currentCount >= MAX_PHOTOS_PER_MEETING) {
-    throw new CellGroupError(`Maksimal ${MAX_PHOTOS_PER_MEETING} foto per meeting`, 400);
+  if (new Date() <= new Date(meeting.waktu_selesai)) {
+    throw new CellGroupError('Foto baru bisa diunggah setelah meeting selesai', 400);
   }
 
-  const { buffer: compressedBuffer, sizeKb } = await compressToTargetSize(fileBuffer);
+  const currentCount = await meetingRepository.countMeetingPhotos(meetingId);
+  if (currentCount > 0 && actorRole !== 'LEADER') {
+    throw new CellGroupError('Hanya Leader yang bisa menambah/mengubah foto yang sudah tersimpan', 403);
+  }
+
+  if (currentCount + fileBuffers.length > MAX_PHOTOS_PER_MEETING) {
+    throw new CellGroupError(`Maksimal ${MAX_PHOTOS_PER_MEETING} foto per meeting`, 400);
+  }
 
   if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   }
-  const fileName = `meeting-${meetingId}-${Date.now()}.jpg`;
-  const filePath = path.join(UPLOAD_DIR, fileName);
-  fs.writeFileSync(filePath, compressedBuffer);
 
-  const id = await meetingRepository.addMeetingPhoto({
-    meetingId,
-    filePath: `/uploads/cg-meeting-photos/${fileName}`,
-    fileSizeKb: sizeKb,
-    uploadedBy: actorUserId,
-  });
+  // Kompres & tulis semua file ke disk dulu SEBELUM insert DB manapun —
+  // kalau salah satu gagal diproses, batch ditolak seluruhnya, tidak ada
+  // foto yang "setengah tersimpan".
+  const prepared = [];
+  for (const fileBuffer of fileBuffers) {
+    const { buffer: compressedBuffer, sizeKb } = await compressToTargetSize(fileBuffer);
+    const fileName = `meeting-${meetingId}-${Date.now()}-${prepared.length}.jpg`;
+    const filePath = path.join(UPLOAD_DIR, fileName);
+    fs.writeFileSync(filePath, compressedBuffer);
+    prepared.push({ fileName, sizeKb });
+  }
+
+  const results = [];
+  for (const { fileName, sizeKb } of prepared) {
+    const id = await meetingRepository.addMeetingPhoto({
+      meetingId,
+      filePath: `/uploads/cg-meeting-photos/${fileName}`,
+      fileSizeKb: sizeKb,
+      uploadedBy: actorUserId,
+    });
+    results.push({ id, sizeKb });
+  }
 
   await recordAuditLog({
     userId: actorUserId,
@@ -173,10 +217,10 @@ async function addPhotoToMeeting(meetingId, fileBuffer, { actorUserId = null } =
     modul: 'CELL_GROUP',
     objectId: meetingId,
     dataSebelum: null,
-    dataSesudah: { sizeKb },
+    dataSesudah: { jumlahFoto: results.length },
   });
 
-  return { id, sizeKb };
+  return results;
 }
 
 /**
@@ -247,10 +291,16 @@ async function getPhotoFile(photoId) {
  * @param {number} options.actorUserId
  * @throws {CellGroupError} 404 jika record tidak ada
  */
-async function deletePhoto(photoId, { actorUserId = null } = {}) {
+async function deletePhoto(photoId, { actorUserId = null, actorRole = null } = {}) {
   const photo = await meetingRepository.findPhotoById(photoId);
   if (!photo) {
     throw new CellGroupError('Foto tidak ditemukan', 404);
+  }
+
+  // Menghapus foto tersimpan = mengedit laporan meeting — sama seperti
+  // absensi, hanya Leader yang boleh (dikonfirmasi user).
+  if (actorRole !== 'LEADER') {
+    throw new CellGroupError('Hanya Leader yang bisa menghapus foto yang sudah tersimpan', 403);
   }
 
   const absolutePath = resolvePhotoPath(photo.file_path);
@@ -274,19 +324,53 @@ async function deletePhoto(photoId, { actorUserId = null } = {}) {
  * Menyimpan absensi untuk seluruh anggota yang hadir di sebuah
  * meeting sekaligus (BAGIAN 3.4 langkah 2-3).
  *
+ * Aturan akses (dikonfirmasi user): absensi hanya bisa diisi setelah
+ * waktu_selesai meeting lewat (tidak ada batas atas — boleh beberapa
+ * hari kemudian). Submit PERTAMA (belum ada data sama sekali) boleh
+ * ADMIN maupun LEADER; begitu sudah ada data tersimpan, perubahan
+ * berikutnya HANYA boleh LEADER — ADMIN diblokir (403).
+ *
  * @param {number} meetingId
  * @param {Array<{ jemaatId: number, hadir: boolean }>} absensiList
  * @param {object} options
  * @param {number} options.actorUserId
+ * @param {string} options.actorRole - 'ADMIN' | 'LEADER'
  */
-async function submitAbsensi(meetingId, absensiList, { actorUserId = null } = {}) {
+async function submitAbsensi(meetingId, absensiList, { actorUserId = null, actorRole = null } = {}) {
   const meeting = await meetingRepository.findMeetingById(meetingId);
   if (!meeting) {
     throw new CellGroupError('Meeting tidak ditemukan', 404);
   }
 
-  for (const { jemaatId, hadir } of absensiList) {
-    await meetingRepository.upsertAbsensi(meetingId, jemaatId, hadir);
+  if (new Date() <= new Date(meeting.waktu_selesai)) {
+    throw new CellGroupError('Absensi baru bisa diisi setelah meeting selesai', 400);
+  }
+
+  const existingAbsensi = await meetingRepository.findAbsensiByMeeting(meetingId);
+  if (existingAbsensi.length > 0 && actorRole !== 'LEADER') {
+    throw new CellGroupError('Hanya Leader yang bisa mengubah absensi yang sudah tersimpan', 403);
+  }
+
+  const activeMembers = await meetingRepository.findActiveMembersAtMeetingTime(meeting.cg_id, meeting.waktu_mulai);
+  const activeMemberIds = new Set(activeMembers.map((m) => m.id));
+  const invalidEntry = absensiList.find(({ jemaatId }) => !activeMemberIds.has(jemaatId));
+  if (invalidEntry) {
+    throw new CellGroupError(`Jemaat ID ${invalidEntry.jemaatId} bukan anggota CG ini pada waktu meeting`, 400);
+  }
+
+  const pool = getPool();
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    for (const { jemaatId, hadir } of absensiList) {
+      await meetingRepository.upsertAbsensi(meetingId, jemaatId, hadir, connection);
+    }
+    await connection.commit();
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
   }
 
   await recordAuditLog({
@@ -324,6 +408,18 @@ async function updateCellGroup(cgId, data, { actorUserId = null } = {}) {
 
   const before = { nama: cg.nama, deskripsi: cg.deskripsi, leader_id: cg.leader_id };
   await cgRepository.update(cgId, updates);
+
+  // Leader baru harus otomatis jadi anggota aktif — kalau tidak, dia
+  // tercatat sebagai leader di cell_group.leader_id tapi tidak pernah
+  // muncul di daftar anggota/absensi (yang berbasis cell_group_members).
+  // Leader lama SENGAJA tidak dihapus dari anggota — tetap jadi anggota
+  // biasa, cuma label "Leader"-nya hilang karena dihitung dari leader_id.
+  if (updates.leader_id !== undefined && updates.leader_id !== cg.leader_id) {
+    const alreadyMember = await cgRepository.isJemaatActiveMember(cgId, updates.leader_id);
+    if (!alreadyMember) {
+      await cgRepository.addMember(cgId, updates.leader_id);
+    }
+  }
 
   await recordAuditLog({
     userId: actorUserId,
@@ -457,7 +553,7 @@ module.exports = {
   removeMemberFromCg,
   createMeeting,
   updateMeeting,
-  addPhotoToMeeting,
+  addPhotosToMeeting,
   listMeetingPhotos,
   getPhotoFile,
   deletePhoto,

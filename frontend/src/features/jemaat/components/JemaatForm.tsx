@@ -24,8 +24,6 @@ const jemaatFormSchema = z.object({
   no_hp: z.string().optional(),
   alamat: z.string().optional(),
   instagram: z.string().optional(),
-  facebook: z.string().optional(),
-  whatsapp: z.string().optional(),
 });
 
 type JemaatFormValues = z.infer<typeof jemaatFormSchema>;
@@ -62,16 +60,12 @@ export default function JemaatForm({ mode, jemaat, onSuccess, onCancel }: Jemaat
       no_hp: jemaat?.no_hp ?? '',
       alamat: jemaat?.alamat ?? '',
       instagram: jemaat?.media_sosial?.instagram ?? '',
-      facebook: jemaat?.media_sosial?.facebook ?? '',
-      whatsapp: jemaat?.media_sosial?.whatsapp ?? '',
     },
   });
 
   function buildPayload(values: JemaatFormValues): CreateJemaatInput {
     const media_sosial: Record<string, string> = {};
     if (values.instagram) media_sosial.instagram = values.instagram;
-    if (values.facebook) media_sosial.facebook = values.facebook;
-    if (values.whatsapp) media_sosial.whatsapp = values.whatsapp;
 
     return {
       nama: values.nama.trim(),
@@ -184,18 +178,6 @@ export default function JemaatForm({ mode, jemaat, onSuccess, onCancel }: Jemaat
                   Instagram
                 </Label>
                 <Input id="instagram" {...register('instagram')} className="mt-1" placeholder="@username" />
-              </div>
-              <div>
-                <Label htmlFor="facebook" className="text-xs font-normal text-slate-500">
-                  Facebook
-                </Label>
-                <Input id="facebook" {...register('facebook')} className="mt-1" placeholder="nama profil" />
-              </div>
-              <div>
-                <Label htmlFor="whatsapp" className="text-xs font-normal text-slate-500">
-                  WhatsApp
-                </Label>
-                <Input id="whatsapp" {...register('whatsapp')} className="mt-1" placeholder="08xxxxxxxxxx" />
               </div>
             </div>
           </div>

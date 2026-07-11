@@ -416,6 +416,23 @@ async function findEventsByJemaatId(jemaatId, { limit = 20, offset = 0 } = {}) {
   return rows;
 }
 
+/**
+ * Cell Group aktif yang dipimpin jemaat ini (leader_id = jemaatId).
+ * Query sama persis dengan bagian isLeaderOfActiveCg di
+ * checkDependencies() — dipakai di sini sebagai info profil biasa
+ * (bukan cuma reaktif saat cek dependensi hapus).
+ * @param {number} jemaatId
+ * @returns {Promise<Array<{id: number, nama: string}>>}
+ */
+async function findLedCellGroups(jemaatId) {
+  const pool = getPool();
+  const [rows] = await pool.query(
+    `SELECT id, nama FROM cell_group WHERE leader_id = :jemaatId AND is_active = TRUE AND deleted_at IS NULL`,
+    { jemaatId }
+  );
+  return rows;
+}
+
 module.exports = {
   create,
   findById,
@@ -428,6 +445,7 @@ module.exports = {
   checkDependencies,
   findCgsByJemaatId,
   findEventsByJemaatId,
+  findLedCellGroups,
   isSimilarName,
   levenshteinDistance,
   normalizeDateFields,

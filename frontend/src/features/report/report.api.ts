@@ -4,8 +4,10 @@ import type {
   AnalyticsReportParams,
   CgReportParams,
   EventReportParams,
+  JemaatReportMode,
   JemaatReportParams,
   ReportGenerateResult,
+  ReportPreviewResult,
   VolunteerReportParams,
 } from '@/types/report.types';
 
@@ -79,7 +81,12 @@ function cleanParams<T extends object>(params: T): Record<string, string | numbe
 }
 
 export async function generateJemaatReport(params: JemaatReportParams): Promise<ReportGenerateResult> {
-  return requestReport('/reports/jemaat', cleanParams(params), params.format);
+  const { ids, ...rest } = params;
+  const cleaned = cleanParams(rest);
+  if (ids && ids.length > 0) {
+    cleaned.ids = ids.join(',');
+  }
+  return requestReport('/reports/jemaat', cleaned, params.format);
 }
 
 export async function generateEventReport(params: EventReportParams): Promise<ReportGenerateResult> {
@@ -96,6 +103,45 @@ export async function generateVolunteerReport(params: VolunteerReportParams): Pr
 
 export async function generateAnalyticsReport(params: AnalyticsReportParams): Promise<ReportGenerateResult> {
   return requestReport('/reports/analytics', cleanParams(params), params.format);
+}
+
+// ── Preview (dry-run) — kolom & data identik dengan hasil generate,
+// tapi hanya PREVIEW_LIMIT baris & tidak memicu audit log/notifikasi/
+// file. Respons JSON biasa (bukan blob), dipakai untuk review sebelum
+// user benar-benar klik Export.
+export async function previewJemaatReport(params: { ids?: number[]; mode?: JemaatReportMode }): Promise<ReportPreviewResult> {
+  const cleaned = cleanParams({ mode: params.mode });
+  if (params.ids && params.ids.length > 0) {
+    cleaned.ids = params.ids.join(',');
+  }
+  const { data } = await api.get<ReportPreviewResult>('/reports/jemaat/preview', { params: cleaned });
+  return data;
+}
+
+export async function previewEventReport(
+  params: { eventId?: number; startDate?: string; endDate?: string },
+): Promise<ReportPreviewResult> {
+  const { data } = await api.get<ReportPreviewResult>('/reports/event/preview', { params: cleanParams(params) });
+  return data;
+}
+
+export async function previewCgReport(
+  params: { cgId?: number; jemaatId?: number; startDate?: string; endDate?: string },
+): Promise<ReportPreviewResult> {
+  const { data } = await api.get<ReportPreviewResult>('/reports/cg/preview', { params: cleanParams(params) });
+  return data;
+}
+
+export async function previewVolunteerReport(
+  params: { jemaatId?: number; eventId?: number; startDate?: string; endDate?: string },
+): Promise<ReportPreviewResult> {
+  const { data } = await api.get<ReportPreviewResult>('/reports/volunteer/preview', { params: cleanParams(params) });
+  return data;
+}
+
+export async function previewAnalyticsReport(params: { bulan: number }): Promise<ReportPreviewResult> {
+  const { data } = await api.get<ReportPreviewResult>('/reports/analytics/preview', { params: cleanParams(params) });
+  return data;
 }
 
 // Karena semua request report pakai responseType: 'blob', error dari

@@ -7,6 +7,7 @@ jest.mock('../../../../src/modules/notification/notification.stub');
 const fs = require('fs');
 const { PassThrough } = require('stream');
 const ExcelJS = require('exceljs');
+const PDFDocument = require('pdfkit');
 const reportRepository = require('../../../../src/modules/report/report.repository');
 const { recordAuditLog } = require('../../../../src/modules/auditlog/auditlog.repository');
 const { decrypt, decryptJson } = require('../../../../src/utils/encryption.util');
@@ -22,11 +23,18 @@ const {
   generateCGReport,
   generateVolunteerReport,
   generateAnalyticsReport,
+  previewJemaatReport,
+  previewEventReport,
+  previewCGReport,
+  previewVolunteerReport,
+  previewAnalyticsReport,
   generateSignedToken,
   consumeSignedToken,
   dekripsiBarisJemaat,
   writeRowsToXlsx,
   writeRowsToPdf,
+  computeColumnWidths,
+  measureRowHeight,
   ReportError,
 } = require('../../../../src/modules/report/report.service');
 
@@ -177,6 +185,194 @@ describe('report.service — writeRowsToPdf (Unit Test)', () => {
     const pageMatches = pdfText.match(/\/Type\s*\/Page[^s]/g) || [];
     expect(pageMatches.length).toBeGreaterThan(1);
   });
+
+  it('harus tetap menghasilkan pdf valid dan lebih banyak halaman ketika sel berisi teks sangat panjang (regresi bug overlap kolom)', async () => {
+    // Sebelum perbaikan, tinggi baris selalu tetap 16pt — teks sepanjang
+    // ini akan wrap ke banyak baris dan menimpa baris berikutnya alih-alih
+    // mendorong paginasi. Sesudah perbaikan, measureRowHeight membuat tiap
+    // baris panjang ini makan lebih dari satu "slot" 16pt, sehingga jumlah
+    // baris yang muat per halaman JAUH lebih sedikit dari 120 baris pendek.
+    const columns = [
+      { header: 'Nama', key: 'nama', widthWeight: 1 },
+      { header: 'Alamat', key: 'alamat', widthWeight: 1 },
+    ];
+    const longAlamat = 'Jl. Grand Wisata Boulevard No. 85, Cluster Mawar No. 12, Bekasi Timur, Jawa Barat 17510, dekat gerbang utama cluster';
+    const rows = Array.from({ length: 40 }, (_, i) => ({ nama: `Jemaat ${i}`, alamat: longAlamat }));
+    const sink = new PassThrough();
+    const getBuffer = collectStream(sink);
+    await writeRowsToPdf(sink, columns, rows);
+
+    expect(getBuffer().subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    const pdfText = getBuffer().toString('latin1');
+    const pageMatches = pdfText.match(/\/Type\s*\/Page[^s]/g) || [];
+    // 40 baris dengan teks sepanjang ini pasti butuh lebih dari 1 halaman
+    // kalau tinggi barisnya dihitung benar (measureRowHeight jauh > 16pt).
+    expect(pageMatches.length).toBeGreaterThan(1);
+  });
+
+  it('harus tetap menghasilkan pdf valid dan lebih besar (blok logo+judul+metadata) ketika meta.title diisi', async () => {
+    const columns = [{ header: 'ID', key: 'id' }];
+    const rows = [{ id: 1 }];
+
+    const sinkPlain = new PassThrough();
+    const getPlainBuffer = collectStream(sinkPlain);
+    await writeRowsToPdf(sinkPlain, columns, rows);
+
+    const sinkWithMeta = new PassThrough();
+    const getMetaBuffer = collectStream(sinkWithMeta);
+    await writeRowsToPdf(sinkWithMeta, columns, rows, {
+      title: 'Laporan Data Jemaat',
+      subtitleLines: ['Dibuat pada: 10 Juli 2026', 'Filter aktif: Status: Aktif'],
+    });
+
+    expect(getPlainBuffer().subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    expect(getMetaBuffer().subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    // Konten PDF di-compress (FlateDecode) jadi teks literal tidak bisa
+    // dicari langsung di buffer mentah — cukup pastikan versi dengan
+    // logo+judul+metadata menghasilkan lebih banyak konten (bukti blok
+    // header ikut tergambar, bukan dilewati begitu saja).
+    expect(getMetaBuffer().length).toBeGreaterThan(getPlainBuffer().length);
+  });
+});
+
+// ── computeColumnWidths ────────────────────────────────────────────
+describe('report.service — computeColumnWidths (Unit Test)', () => {
+  it('lebar kolom proporsional terhadap widthWeight dan totalnya = usableWidth', () => {
+    const columns = [
+      { widthWeight: 1 },
+      { widthWeight: 2 },
+      { widthWeight: 1 },
+    ];
+    const widths = computeColumnWidths(columns, 400);
+    expect(widths[1]).toBeCloseTo(widths[0] * 2, 5);
+    expect(widths[0] + widths[1] + widths[2]).toBeCloseTo(400, 5);
+  });
+
+  it('kolom tanpa widthWeight dianggap 1 (bobot default)', () => {
+    const widths = computeColumnWidths([{}, {}], 200);
+    expect(widths[0]).toBeCloseTo(widths[1], 5);
+  });
+
+  it('lebar kolom tidak boleh di bawah floor minimum walau bobotnya sangat kecil', () => {
+    const columns = [{ widthWeight: 10 }, { widthWeight: 0.01 }];
+    const widths = computeColumnWidths(columns, 300);
+    expect(widths[1]).toBeGreaterThanOrEqual(45);
+  });
+});
+
+// ── measureRowHeight ────────────────────────────────────────────────
+describe('report.service — measureRowHeight (Unit Test)', () => {
+  it('teks panjang menghasilkan tinggi baris lebih besar dari teks pendek (akar perbaikan bug overlap)', () => {
+    const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
+    doc.pipe(new PassThrough()); // buang output, kita hanya perlu instance doc untuk mengukur
+
+    const columns = [{ key: 'text' }];
+    const colWidths = [100];
+    const shortHeight = measureRowHeight(doc, columns, colWidths, () => 'Singkat', { font: 'Helvetica', fontSize: 8 });
+    const longHeight = measureRowHeight(
+      doc, columns, colWidths,
+      () => 'Ini adalah teks yang sangat panjang sehingga pasti wrap ke beberapa baris di lebar kolom yang sempit ini',
+      { font: 'Helvetica', fontSize: 8 }
+    );
+
+    expect(longHeight).toBeGreaterThan(shortHeight);
+  });
+
+  it('tinggi baris di-clamp ke PDF_MAX_ROW_LINES supaya satu sel ekstrem tidak merusak halaman', () => {
+    const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
+    doc.pipe(new PassThrough());
+
+    const columns = [{ key: 'text' }];
+    const colWidths = [30]; // sangat sempit, memaksa banyak baris wrap
+    const extremeText = 'kata '.repeat(200);
+    const height = measureRowHeight(doc, columns, colWidths, () => extremeText, { font: 'Helvetica', fontSize: 8 });
+
+    doc.font('Helvetica').fontSize(8);
+    const maxAllowed = doc.currentLineHeight() * 4 + 8; // PDF_MAX_ROW_LINES=4, PDF_ROW_PADDING*2=8
+    expect(height).toBeLessThanOrEqual(maxAllowed + 0.01);
+  });
+});
+
+// ── preview*Report ──────────────────────────────────────────────────
+describe('report.service — preview*Report (Unit Test)', () => {
+  it('previewJemaatReport tidak menulis file, tidak audit log, tidak notifikasi — hanya kembalikan columns/rows/total', async () => {
+    reportRepository.countJemaat.mockResolvedValue(3);
+    reportRepository.getJemaatReport.mockResolvedValue([
+      { id: 1, nama: 'Budi', no_hp: null, no_hp_iv: null, alamat: null, alamat_iv: null },
+    ]);
+
+    const result = await previewJemaatReport({});
+
+    expect(result.total).toBe(3);
+    expect(result.rows).toHaveLength(1);
+    expect(result.columns.some((c) => c.header === 'Nama')).toBe(true);
+    expect(reportRepository.getJemaatReport).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 20 })
+    );
+    expect(recordAuditLog).not.toHaveBeenCalled();
+    expect(notifyLeaders).not.toHaveBeenCalled();
+  });
+
+  it('previewJemaatReport mode detail menambah kolom Cell Group & Volunteer', async () => {
+    reportRepository.countJemaat.mockResolvedValue(1);
+    reportRepository.getJemaatReport.mockResolvedValue([
+      { id: 1, nama: 'Budi', no_hp: null, no_hp_iv: null, alamat: null, alamat_iv: null },
+    ]);
+    reportRepository.getJemaatCgSummary.mockResolvedValue({ 1: 'CG Alpha' });
+    reportRepository.getJemaatVolunteerSummary.mockResolvedValue({ 1: 'Usher' });
+
+    const result = await previewJemaatReport({ mode: 'detail' });
+
+    expect(result.columns.some((c) => c.header === 'Cell Group')).toBe(true);
+    expect(result.rows[0].cell_group).toBe('CG Alpha');
+    expect(result.rows[0].volunteer).toBe('Usher');
+  });
+
+  it('previewEventReport: total mencerminkan seluruh baris yang match filter, rows dipotong ke PREVIEW_LIMIT', async () => {
+    const allRows = Array.from({ length: 30 }, (_, i) => ({ event_id: i, judul: `Event ${i}`, total_hadir: 10 }));
+    reportRepository.getEventKehadiranReport.mockResolvedValue(allRows);
+
+    const result = await previewEventReport({});
+
+    expect(result.total).toBe(30);
+    expect(result.rows).toHaveLength(20);
+    expect(recordAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('previewCGReport tidak memicu efek samping export', async () => {
+    reportRepository.getCGKehadiranReport.mockResolvedValue([
+      { nama_cg: 'CG Alpha', nama_jemaat: 'Budi', hadir: true },
+    ]);
+
+    const result = await previewCGReport({});
+
+    expect(result.rows).toHaveLength(1);
+    expect(recordAuditLog).not.toHaveBeenCalled();
+    expect(notifyLeaders).not.toHaveBeenCalled();
+  });
+
+  it('previewVolunteerReport tidak memicu efek samping export', async () => {
+    reportRepository.getVolunteerReport.mockResolvedValue([
+      { nama_jemaat: 'Budi', nama_event: 'Ibadah', status: 'AKTIF' },
+    ]);
+
+    const result = await previewVolunteerReport({});
+
+    expect(result.rows).toHaveLength(1);
+    expect(recordAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('previewAnalyticsReport tidak memicu efek samping export', async () => {
+    reportRepository.getAnalyticsReport.mockResolvedValue([
+      { periode: '2026-01', jemaat_baru: 5, masih_aktif: 4 },
+    ]);
+
+    const result = await previewAnalyticsReport({ bulan: 6 });
+
+    expect(result.rows).toHaveLength(1);
+    expect(recordAuditLog).not.toHaveBeenCalled();
+    expect(notifyLeaders).not.toHaveBeenCalled();
+  });
 });
 
 // ── generateJemaatReport (format xlsx/pdf) ────────────────────────
@@ -252,15 +448,26 @@ describe('report.service — generateJemaatReport format ekspor (Unit Test)', ()
     await workbook.xlsx.readFile(result.filePath);
     const worksheet = workbook.worksheets[0];
 
-    const headers = worksheet.getRow(1).values.filter((v) => v !== undefined && v !== null);
+    // Baris 1 sekarang judul laporan (blok metadata baru), bukan header
+    // kolom — cari baris header secara dinamis, bukan hardcode row 1/2.
+    expect(worksheet.getRow(1).getCell(1).value).toBe('Laporan Data Jemaat');
+    let headerRowNumber = null;
+    worksheet.eachRow((row, rowNumber) => {
+      if (headerRowNumber === null && row.values.includes('No HP')) {
+        headerRowNumber = rowNumber;
+      }
+    });
+    const headers = worksheet.getRow(headerRowNumber).values.filter((v) => v !== undefined && v !== null);
     expect(headers).toContain('No HP');
     expect(headers).toContain('Alamat');
     expect(headers).toContain('Media Sosial');
 
-    const values = worksheet.getRow(2).values.filter((v) => v !== undefined && v !== null);
+    const values = worksheet.getRow(headerRowNumber + 1).values.filter((v) => v !== undefined && v !== null);
     expect(values).toContain('decrypted:ciphertext_hp');
     expect(values).toContain('decrypted:ciphertext_addr');
-    expect(values).toContain(JSON.stringify({ instagram: 'decrypted:ciphertext_medsos' }));
+    // media_sosial di export sekarang diformat jadi "Instagram: ..." (item 4:
+    // hanya Instagram yang didukung), bukan blob JSON.stringify mentah.
+    expect(values).toContain('Instagram: decrypted:ciphertext_medsos');
     expect(values).not.toContain('ciphertext_hp');
     expect(values).not.toContain('ciphertext_medsos');
   });

@@ -49,9 +49,15 @@ async function getActiveMembers(req, res) {
 async function addMember(req, res) {
   try {
     const id = Number(req.params.id);
+    const jemaatId = req.body.jemaatId;
     const actorUserId = req.user?.userId ?? null;
-    await cgService.addMemberToCg(id, req.body.jemaatId, { actorUserId });
-    return res.status(201).json({ message: 'Anggota berhasil ditambahkan' });
+    await cgService.addMemberToCg(id, jemaatId, { actorUserId });
+    res.status(201).json({ message: 'Anggota berhasil ditambahkan' });
+
+    // is_non_cg jemaat baru akurat lagi setelah recompute skor — tanpa
+    // ini nilainya basi sampai cron malam atau trigger absensi/event lain
+    // kebetulan jalan (lihat pola sama di submitAbsensi di bawah).
+    scoringService.triggerSkorUpdate([jemaatId], { actorUserId });
   } catch (err) {
     return handleError(err, res);
   }
@@ -63,7 +69,9 @@ async function removeMember(req, res) {
     const jemaatId = Number(req.params.jemaatId);
     const actorUserId = req.user?.userId ?? null;
     await cgService.removeMemberFromCg(id, jemaatId, { actorUserId });
-    return res.status(200).json({ message: 'Anggota berhasil dikeluarkan' });
+    res.status(200).json({ message: 'Anggota berhasil dikeluarkan' });
+
+    scoringService.triggerSkorUpdate([jemaatId], { actorUserId });
   } catch (err) {
     return handleError(err, res);
   }
@@ -97,12 +105,14 @@ async function uploadPhoto(req, res) {
   try {
     const meetingId = Number(req.params.meetingId);
     const actorUserId = req.user?.userId ?? null;
+    const actorRole = req.user?.peran ?? null;
 
-    if (!req.file) {
+    if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: 'File foto wajib diunggah' });
     }
 
-    const result = await cgService.addPhotoToMeeting(meetingId, req.file.buffer, { actorUserId });
+    const fileBuffers = req.files.map((f) => f.buffer);
+    const result = await cgService.addPhotosToMeeting(meetingId, fileBuffers, { actorUserId, actorRole });
     return res.status(201).json(result);
   } catch (err) {
     return handleError(err, res);
@@ -135,7 +145,8 @@ async function deletePhoto(req, res) {
   try {
     const photoId = Number(req.params.photoId);
     const actorUserId = req.user?.userId ?? null;
-    await cgService.deletePhoto(photoId, { actorUserId });
+    const actorRole = req.user?.peran ?? null;
+    await cgService.deletePhoto(photoId, { actorUserId, actorRole });
     return res.status(200).json({ message: 'Foto berhasil dihapus' });
   } catch (err) {
     return handleError(err, res);
@@ -156,12 +167,38 @@ async function getActiveMembersAtMeetingTime(req, res) {
   }
 }
 
+async function getAbsensiHistoryByJemaat(req, res) {
+  try {
+    const jemaatId = Number(req.params.jemaatId);
+    const { limit, offset } = req.query;
+    const history = await meetingRepository.findAbsensiHistoryByJemaat(jemaatId, { limit, offset });
+    return res.status(200).json(history);
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+async function getAbsensi(req, res) {
+  try {
+    const meetingId = Number(req.params.meetingId);
+    const meeting = await meetingRepository.findMeetingById(meetingId);
+    if (!meeting) {
+      return res.status(404).json({ message: 'Meeting tidak ditemukan' });
+    }
+    const absensi = await meetingRepository.findAbsensiByMeeting(meetingId);
+    return res.status(200).json(absensi);
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
 async function submitAbsensi(req, res) {
   try {
     const meetingId = Number(req.params.meetingId);
     const actorUserId = req.user?.userId ?? null;
+    const actorRole = req.user?.peran ?? null;
     const absensiList = req.body.absensi;
-    await cgService.submitAbsensi(meetingId, absensiList, { actorUserId });
+    await cgService.submitAbsensi(meetingId, absensiList, { actorUserId, actorRole });
     res.status(200).json({ message: 'Absensi berhasil disimpan' });
 
     // Skor keaktifan real-time untuk setiap jemaat yang diabsen —
@@ -263,6 +300,8 @@ module.exports = {
   getPhoto,
   deletePhoto,
   getActiveMembersAtMeetingTime,
+  getAbsensi,
+  getAbsensiHistoryByJemaat,
   submitAbsensi,
   listMeetingsByCg,
 };

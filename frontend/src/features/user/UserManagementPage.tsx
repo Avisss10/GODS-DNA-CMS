@@ -16,6 +16,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import PulsingDot from '@/components/PulsingDot';
+import { useSort, type SortExtractors } from '@/hooks/useSort';
+import { useAuthStore } from '@/store/auth.store';
 import { listUsers, updateUserStatus, type ManagedUser } from './user.api';
 import CreateUserModal from './components/CreateUserModal';
 import ResetPasswordModal from './components/ResetPasswordModal';
@@ -29,8 +31,15 @@ function formatLastLogin(value: string | null): string {
   });
 }
 
+const USER_SORT_EXTRACTORS: SortExtractors<ManagedUser> = {
+  username: (u) => u.username,
+  peran: (u) => u.peran,
+  last_login_at: (u) => u.last_login_at ?? '',
+};
+
 export default function UserManagementPage() {
   const queryClient = useQueryClient();
+  const currentUserId = useAuthStore((state) => state.userId);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<ManagedUser | null>(null);
@@ -70,6 +79,13 @@ export default function UserManagementPage() {
   }
 
   const items = data ?? [];
+  const { sorted: sortedItems, handleSort, directionFor } = useSort(items, USER_SORT_EXTRACTORS);
+
+  // Leader tidak boleh mengubah status Leader lain — hanya dev (rest-dev.http)
+  // yang bisa. Diri sendiri & akun ADMIN tetap bisa diubah seperti biasa.
+  function canManageStatus(u: ManagedUser): boolean {
+    return u.peran === 'ADMIN' || u.id === currentUserId;
+  }
 
   return (
     <div className="space-y-4">
@@ -120,16 +136,39 @@ export default function UserManagementPage() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead>Username</TableHead>
-                  <TableHead>Role</TableHead>
+                  <TableHead>No</TableHead>
+                  <TableHead
+                    sortable
+                    sortDirection={directionFor('username')}
+                    onSortAsc={() => handleSort('username', 'asc')}
+                    onSortDesc={() => handleSort('username', 'desc')}
+                  >
+                    Username
+                  </TableHead>
+                  <TableHead
+                    sortable
+                    sortDirection={directionFor('peran')}
+                    onSortAsc={() => handleSort('peran', 'asc')}
+                    onSortDesc={() => handleSort('peran', 'desc')}
+                  >
+                    Role
+                  </TableHead>
                   <TableHead>Status Aktif</TableHead>
-                  <TableHead>Last Login</TableHead>
+                  <TableHead
+                    sortable
+                    sortDirection={directionFor('last_login_at')}
+                    onSortAsc={() => handleSort('last_login_at', 'asc')}
+                    onSortDesc={() => handleSort('last_login_at', 'desc')}
+                  >
+                    Last Login
+                  </TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((u) => (
+                {sortedItems.map((u, i) => (
                   <TableRow key={u.id} className={!u.aktif ? 'opacity-60' : undefined}>
+                    <TableCell className="text-slate-500">{i + 1}</TableCell>
                     <TableCell className="font-medium text-slate-800">{u.username}</TableCell>
                     <TableCell>
                       {/* Role read-only: badge saja — tidak ada endpoint update peran. */}
@@ -137,16 +176,21 @@ export default function UserManagementPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <StatusToggleSwitch
-                          checked={u.aktif}
-                          label={`Ubah status akun ${u.username}`}
-                          onClick={() => setToggleTarget(u)}
-                        />
+                        {canManageStatus(u) ? (
+                          <StatusToggleSwitch
+                            checked={u.aktif}
+                            label={`Ubah status akun ${u.username}`}
+                            onClick={() => setToggleTarget(u)}
+                          />
+                        ) : null}
                         <Badge variant={u.aktif ? 'default' : 'secondary'}>
                           {u.aktif && <PulsingDot colorClass="bg-status-aktif" />}
                           {u.aktif ? 'Aktif' : 'Nonaktif'}
                         </Badge>
                       </div>
+                      {!canManageStatus(u) && (
+                        <p className="mt-1 text-xs text-slate-400">Hanya dev yang bisa ubah status Leader lain</p>
+                      )}
                     </TableCell>
                     <TableCell className="text-slate-600">{formatLastLogin(u.last_login_at)}</TableCell>
                     <TableCell className="text-right">
@@ -166,7 +210,7 @@ export default function UserManagementPage() {
 
           {/* Mobile: card-list */}
           <div className="space-y-3 sm:hidden">
-            {items.map((u) => (
+            {sortedItems.map((u) => (
               <div
                 key={u.id}
                 className={cn("rounded-card border border-slate-200 bg-card p-4 transition-opacity", !u.aktif && "opacity-60")}
@@ -184,11 +228,15 @@ export default function UserManagementPage() {
                 <p className="mt-2 text-xs text-slate-500">Login terakhir: {formatLastLogin(u.last_login_at)}</p>
                 <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
                   <div className="flex items-center gap-2">
-                    <StatusToggleSwitch
-                      checked={u.aktif}
-                      label={`Ubah status akun ${u.username}`}
-                      onClick={() => setToggleTarget(u)}
-                    />
+                    {canManageStatus(u) ? (
+                      <StatusToggleSwitch
+                        checked={u.aktif}
+                        label={`Ubah status akun ${u.username}`}
+                        onClick={() => setToggleTarget(u)}
+                      />
+                    ) : (
+                      <span className="text-xs text-slate-400">Hanya dev yang bisa ubah</span>
+                    )}
                     <span className="text-xs text-slate-500">Status</span>
                   </div>
                   {u.peran === 'ADMIN' && (

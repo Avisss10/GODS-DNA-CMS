@@ -30,6 +30,7 @@ export interface CellGroupMember {
   id: number; // id jemaat
   nama: string;
   joined_at: string;
+  is_leader: boolean;
 }
 
 export interface CgMeetingListItem {
@@ -66,6 +67,14 @@ export interface CgMeetingPhoto {
 export interface ActiveMemberAtMeeting {
   id: number;
   nama: string;
+  is_leader: boolean;
+}
+
+// GET /cell-groups/meetings/:meetingId/absensi — absensi tersimpan
+export interface AbsensiRecord {
+  jemaat_id: number;
+  nama: string;
+  hadir: boolean;
 }
 
 // POST /cell-groups — camelCase (leaderId)

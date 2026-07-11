@@ -13,6 +13,7 @@ router.get('/jemaat/:id/full', authenticate, controller.getFull);
 router.get('/jemaat/:id/sensitive/:field', authenticate, controller.getSensitiveField);
 router.get('/jemaat/:id/cell-groups', authenticate, controller.getCellGroups);
 router.get('/jemaat/:id/events', authenticate, controller.getEventHistory);
+router.get('/jemaat/:id/volunteer-assignments', authenticate, controller.getVolunteerAssignments);
 router.put('/jemaat/:id', authenticate, updateJemaatValidation, handleValidationErrors, controller.update);
 router.delete('/jemaat/:id', authenticate, controller.remove);
 

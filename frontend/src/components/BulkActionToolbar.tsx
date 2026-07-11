@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -7,9 +8,18 @@ interface BulkActionToolbarProps {
   onAction: () => void;
   onClear: () => void;
   disabled?: boolean;
+  /** Slot aksi tambahan non-destruktif, dirender sebelum tombol aksi utama (mis. tombol Export). */
+  extraActions?: ReactNode;
 }
 
-export default function BulkActionToolbar({ count, actionLabel, onAction, onClear, disabled }: BulkActionToolbarProps) {
+export default function BulkActionToolbar({
+  count,
+  actionLabel,
+  onAction,
+  onClear,
+  disabled,
+  extraActions,
+}: BulkActionToolbarProps) {
   if (count === 0) return null;
 
   return (
@@ -19,6 +29,7 @@ export default function BulkActionToolbar({ count, actionLabel, onAction, onClea
         <Button variant="ghost" size="sm" onClick={onClear} disabled={disabled}>
           Batal Pilih
         </Button>
+        {extraActions}
         <Button variant="destructive" size="sm" onClick={onAction} disabled={disabled}>
           <Trash2 className="h-3.5 w-3.5" />
           {actionLabel}

@@ -12,7 +12,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getMe, login as loginRequest } from '@/features/auth/auth.api';
 import { useAuthStore } from '@/store/auth.store';
-import gwLogoWhite from '@/assets/brand/gw-logo-white.png';
 import gwLogoSlate from '@/assets/brand/gw-logo-slate.png';
 
 const loginSchema = z.object({
@@ -42,11 +41,10 @@ export default function LoginPage() {
   }
 
   async function onSubmit(values: LoginFormValues) {
+    let nama: string;
     try {
-      await loginRequest(values.username, values.password);
-      const me = await getMe();
-      setUser(me);
-      navigate('/dashboard', { replace: true });
+      const result = await loginRequest(values.username, values.password);
+      nama = result.nama;
     } catch (err) {
       const httpStatus = axios.isAxiosError(err) ? err.response?.status : undefined;
 
@@ -60,100 +58,98 @@ export default function LoginPage() {
       } else {
         toast.error('Terjadi kesalahan pada server, silakan coba lagi');
       }
+      return;
+    }
+
+    // Login sudah berhasil di server pada titik ini (cookie sesi ter-set).
+    // Kegagalan di sini BUKAN kredensial salah — jangan pakai pesan yang
+    // sama dengan catch di atas supaya user tidak bingung.
+    try {
+      const me = await getMe();
+      setUser(me);
+      toast.success(`Selamat datang, ${nama}!`);
+      navigate('/dashboard', { replace: true });
+    } catch {
+      toast.error('Login berhasil, tapi gagal memuat data akun. Silakan muat ulang halaman.');
     }
   }
 
   return (
-    <div className="flex min-h-screen bg-surface">
-      {/* Panel branding — hanya tampil di layar lg+ */}
-      <div className="relative hidden w-1/2 flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-accent-from to-accent-to p-12 lg:flex">
-        <div aria-hidden className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
-        <div aria-hidden className="absolute -bottom-32 -right-16 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
-        <img src={gwLogoWhite} alt="GOD'S DNA Grand Wisata" className="relative w-64 max-w-full" />
-        <p className="relative mt-6 max-w-xs text-center text-sm text-white/80">
-          Sistem manajemen jemaat, cell group, dan pelayanan gereja.
-        </p>
-      </div>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-surface px-4 py-12">
+      <div className="w-full max-w-sm">
+        <img src={gwLogoSlate} alt="GOD'S DNA Grand Wisata" className="mx-auto mb-6 h-8 w-auto" />
 
-      <div className="flex flex-1 flex-col items-center justify-center px-4 py-12">
-        <div className="w-full max-w-sm">
-          <img
-            src={gwLogoSlate}
-            alt="GOD'S DNA Grand Wisata"
-            className="mx-auto mb-6 h-7 w-auto lg:hidden"
-          />
-
-          <Card className="rounded-xl border-slate-200/70 shadow-popover">
-            <CardHeader>
-              <CardTitle className="text-xl">GODS DNA CMS</CardTitle>
-              <CardDescription>Masuk untuk melanjutkan</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
-                <div className="space-y-1.5">
-                  <Label htmlFor="username">Username</Label>
-                  <div className="relative">
-                    <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <Input
-                      id="username"
-                      autoComplete="username"
-                      disabled={isSubmitting}
-                      className="pl-9"
-                      {...register('username')}
-                    />
-                  </div>
-                  {errors.username && (
-                    <p className="flex items-center gap-1 text-xs text-destructive">
-                      <AlertCircle className="h-3.5 w-3.5" />
-                      {errors.username.message}
-                    </p>
-                  )}
+        <Card className="overflow-hidden rounded-xl border-slate-200/70 shadow-popover">
+          <div className="h-1 bg-gradient-to-r from-accent-from to-accent-to" />
+          <CardHeader>
+            <CardTitle className="text-xl">GODS DNA CMS</CardTitle>
+            <CardDescription>Masuk untuk melanjutkan</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
+              <div className="space-y-1.5">
+                <Label htmlFor="username">Username</Label>
+                <div className="relative">
+                  <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    id="username"
+                    autoComplete="username"
+                    disabled={isSubmitting}
+                    className="pl-9"
+                    {...register('username')}
+                  />
                 </div>
+                {errors.username && (
+                  <p className="flex items-center gap-1 text-xs text-destructive">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    {errors.username.message}
+                  </p>
+                )}
+              </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="password">Password</Label>
-                  <div className="relative">
-                    <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <Input
-                      id="password"
-                      type={showPassword ? 'text' : 'password'}
-                      autoComplete="current-password"
-                      disabled={isSubmitting}
-                      className="pl-9 pr-9"
-                      {...register('password')}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-smooth hover:text-slate-600"
-                      aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
-                      tabIndex={-1}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  {errors.password && (
-                    <p className="flex items-center gap-1 text-xs text-destructive">
-                      <AlertCircle className="h-3.5 w-3.5" />
-                      {errors.password.message}
-                    </p>
-                  )}
+              <div className="space-y-1.5">
+                <Label htmlFor="password">Password</Label>
+                <div className="relative">
+                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    disabled={isSubmitting}
+                    className="pl-9 pr-9"
+                    {...register('password')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-smooth hover:text-slate-600"
+                    aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
+                {errors.password && (
+                  <p className="flex items-center gap-1 text-xs text-destructive">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    {errors.password.message}
+                  </p>
+                )}
+              </div>
 
-                <Button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full bg-gradient-to-r from-accent-from to-accent-to text-white"
-                >
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isSubmitting ? 'Masuk...' : 'Masuk'}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-gradient-to-r from-accent-from to-accent-to text-white"
+              >
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isSubmitting ? 'Masuk...' : 'Masuk'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
 
-          <p className="mt-6 text-center text-xs text-slate-400">GODS DNA CMS · Grand Wisata</p>
-        </div>
+        <p className="mt-6 text-center text-xs text-slate-400">GODS DNA CMS · Grand Wisata</p>
       </div>
     </div>
   );

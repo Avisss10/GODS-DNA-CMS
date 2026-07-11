@@ -1,8 +1,9 @@
 ﻿import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import { toast } from '@/lib/toast';
-import { HandHeart, Pencil, Plus } from 'lucide-react';
+import { Eye, HandHeart, Pencil, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,6 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import PulsingDot from '@/components/PulsingDot';
+import { useSort, type SortExtractors } from '@/hooks/useSort';
 import {
   activateVolunteerType,
   deactivateVolunteerType,
@@ -26,6 +28,11 @@ import DeactivateVolunteerTypeDialog from './components/DeactivateVolunteerTypeD
 import StatusToggleSwitch from './components/StatusToggleSwitch';
 import { cn } from '@/lib/utils';
 
+const VOLUNTEER_TYPE_SORT_EXTRACTORS: SortExtractors<VolunteerTypeListItem> = {
+  nama: (v) => v.nama,
+  jumlah_anggota: (v) => v.jumlah_anggota,
+};
+
 export default function VolunteerTypeListPage() {
   const queryClient = useQueryClient();
 
@@ -33,7 +40,21 @@ export default function VolunteerTypeListPage() {
   const [editItem, setEditItem] = useState<VolunteerTypeListItem | null>(null);
 
   const [deactivateTarget, setDeactivateTarget] = useState<VolunteerTypeListItem | null>(null);
-  const [isTogglingId, setIsTogglingId] = useState<number | null>(null);
+  // Set (bukan scalar) — toggle beberapa baris berbeda bisa in-flight
+  // bersamaan tanpa saling menimpa status disabled satu sama lain.
+  const [togglingIds, setTogglingIds] = useState<Set<number>>(new Set());
+
+  function addTogglingId(id: number) {
+    setTogglingIds((prev) => new Set(prev).add(id));
+  }
+
+  function removeTogglingId(id: number) {
+    setTogglingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['volunteer-types', 'list'],
@@ -60,7 +81,7 @@ export default function VolunteerTypeListPage() {
 
   // OFF -> ON: langsung tanpa dialog berat, cukup toast sukses.
   async function handleActivate(item: VolunteerTypeListItem) {
-    setIsTogglingId(item.id);
+    addTogglingId(item.id);
     try {
       const res = await activateVolunteerType(item.id);
       toast.success(res.message);
@@ -74,23 +95,24 @@ export default function VolunteerTypeListPage() {
         toast.error('Gagal mengaktifkan jenis volunteer');
       }
     } finally {
-      setIsTogglingId(null);
+      removeTogglingId(item.id);
     }
   }
 
   // ON -> OFF: lewat dialog konfirmasi (destruktif).
   async function handleConfirmDeactivate() {
     if (!deactivateTarget) return;
-    setIsTogglingId(deactivateTarget.id);
+    const targetId = deactivateTarget.id;
+    addTogglingId(targetId);
     try {
-      const res = await deactivateVolunteerType(deactivateTarget.id);
+      const res = await deactivateVolunteerType(targetId);
       toast.success(res.message);
       invalidateList();
       setDeactivateTarget(null);
     } catch {
       toast.error('Gagal menonaktifkan jenis volunteer');
     } finally {
-      setIsTogglingId(null);
+      removeTogglingId(targetId);
     }
   }
 
@@ -103,6 +125,7 @@ export default function VolunteerTypeListPage() {
   }
 
   const isEmpty = !isLoading && !isError && (data?.length ?? 0) === 0;
+  const { sorted: sortedItems, handleSort, directionFor } = useSort(data ?? [], VOLUNTEER_TYPE_SORT_EXTRACTORS);
 
   return (
     <div className="space-y-4">
@@ -149,19 +172,35 @@ export default function VolunteerTypeListPage() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead>Nama</TableHead>
+                  <TableHead>No</TableHead>
+                  <TableHead
+                    sortable
+                    sortDirection={directionFor('nama')}
+                    onSortAsc={() => handleSort('nama', 'asc')}
+                    onSortDesc={() => handleSort('nama', 'desc')}
+                  >
+                    Nama
+                  </TableHead>
                   <TableHead>Deskripsi</TableHead>
-                  <TableHead>Jumlah Anggota</TableHead>
+                  <TableHead
+                    sortable
+                    sortDirection={directionFor('jumlah_anggota')}
+                    onSortAsc={() => handleSort('jumlah_anggota', 'asc')}
+                    onSortDesc={() => handleSort('jumlah_anggota', 'desc')}
+                  >
+                    Jumlah Anggota
+                  </TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data!.map((item) => (
+                {sortedItems.map((item, i) => (
                   <TableRow
                     key={item.id}
                     className={cn('transition-opacity', !item.is_active && 'opacity-60')}
                   >
+                    <TableCell className="text-slate-500">{i + 1}</TableCell>
                     <TableCell className="font-medium text-slate-800">{item.nama}</TableCell>
                     <TableCell className="max-w-xs text-slate-600">
                       <span className="line-clamp-2">{item.deskripsi || '-'}</span>
@@ -171,7 +210,7 @@ export default function VolunteerTypeListPage() {
                       <div className="flex items-center gap-2">
                         <StatusToggleSwitch
                           checked={item.is_active}
-                          disabled={isTogglingId === item.id}
+                          disabled={togglingIds.has(item.id)}
                           label={`Ubah status jenis volunteer ${item.nama}`}
                           onClick={() => handleToggleClick(item)}
                         />
@@ -182,10 +221,18 @@ export default function VolunteerTypeListPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                        Edit
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button asChild variant="outline" size="sm">
+                          <Link to={`/volunteer/${item.id}`}>
+                            <Eye className="h-3.5 w-3.5" />
+                            Detail
+                          </Link>
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                          Edit
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -195,7 +242,7 @@ export default function VolunteerTypeListPage() {
 
           {/* Mobile: card-list, disembunyikan di tablet ke atas */}
           <div className="space-y-3 sm:hidden">
-            {data!.map((item) => (
+            {sortedItems.map((item) => (
               <div
                 key={item.id}
                 className={cn(
@@ -218,16 +265,24 @@ export default function VolunteerTypeListPage() {
                   <div className="flex items-center gap-2">
                     <StatusToggleSwitch
                       checked={item.is_active}
-                      disabled={isTogglingId === item.id}
+                      disabled={togglingIds.has(item.id)}
                       label={`Ubah status jenis volunteer ${item.nama}`}
                       onClick={() => handleToggleClick(item)}
                     />
                     <span className="text-xs text-slate-500">Status</span>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edit
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button asChild variant="outline" size="sm">
+                      <Link to={`/volunteer/${item.id}`}>
+                        <Eye className="h-3.5 w-3.5" />
+                        Detail
+                      </Link>
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                      Edit
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -246,7 +301,7 @@ export default function VolunteerTypeListPage() {
       <DeactivateVolunteerTypeDialog
         open={!!deactivateTarget}
         namaJenis={deactivateTarget?.nama ?? null}
-        isSubmitting={isTogglingId === deactivateTarget?.id}
+        isSubmitting={togglingIds.has(deactivateTarget?.id ?? -1)}
         onOpenChange={(open) => {
           if (!open) setDeactivateTarget(null);
         }}
