@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const auditlogRepository = require('./auditlog.repository');
 const { getRedisClient } = require('../../config/redis');
 const { notifyLeaders } = require('../notification/notification.stub');
+const { stableStringify } = require('../../utils/stable-stringify.util');
 
 // Dedup notifikasi tamper per baris audit log: 1x per 24 jam,
 // supaya membuka halaman audit log berulang tidak membanjiri Leader.
@@ -43,13 +44,21 @@ async function notifyTamperedRow(auditLogId) {
 
 /**
  * Verifikasi HMAC satu baris audit log.
- * Sesuai BAGIAN 8.2: hitung ulang HMAC dari data baris,
- * bandingkan dengan hmac_signature yang tersimpan.
+ * Sesuai BAGIAN 8.2: hitung ulang HMAC dari data baris, bandingkan
+ * dengan hmac_signature yang tersimpan.
+ *
+ * Rumus HARUS tetap identik dengan auditlogRepository.computeHmac
+ * (termasuk stableStringify untuk data_sebelum/data_sesudah — TiDB
+ * mengalfabetkan ulang urutan key JSON saat disimpan, jadi tanpa
+ * normalisasi ini baris yang sah pun bisa salah ditandai tampered).
+ * Dibangun lokal (bukan delegasi ke auditlogRepository.computeHmac)
+ * supaya modul ini tidak bergantung pada auditlog.repository saat
+ * runtime — auditlog.service.test.js meng-automock seluruh modul itu.
  *
  * Formula HMAC:
  *   message = id + user_id + aksi + modul + object_id +
- *             JSON.stringify(data_sebelum) +
- *             JSON.stringify(data_sesudah) +
+ *             stableStringify(data_sebelum) +
+ *             stableStringify(data_sesudah) +
  *             created_at.toISOString()
  *
  * @param {object} row - baris audit log dari database
@@ -69,8 +78,8 @@ function verifyHmac(row) {
     String(row.aksi ?? ''),
     String(row.modul ?? ''),
     String(row.object_id ?? ''),
-    JSON.stringify(row.data_sebelum ?? null),
-    JSON.stringify(row.data_sesudah ?? null),
+    stableStringify(row.data_sebelum ?? null),
+    stableStringify(row.data_sesudah ?? null),
     createdAt,
   ].join('');
 

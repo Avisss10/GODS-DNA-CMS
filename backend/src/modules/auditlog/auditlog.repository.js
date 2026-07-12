@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { getPool } = require('../../config/database');
+const { stableStringify } = require('../../utils/stable-stringify.util');
 
 /**
  * Hitung HMAC SHA-256 untuk satu baris audit log.
@@ -20,8 +21,8 @@ function computeHmac({ id, userId, aksi, modul, objectId, dataSebelum, dataSesud
     String(aksi ?? '') +
     String(modul ?? '') +
     String(objectId ?? '') +
-    JSON.stringify(dataSebelum ?? null) +
-    JSON.stringify(dataSesudah ?? null) +
+    stableStringify(dataSebelum ?? null) +
+    stableStringify(dataSesudah ?? null) +
     (createdAt instanceof Date ? createdAt.toISOString() : new Date(createdAt).toISOString());
 
   return crypto.createHmac('sha256', secretKey).update(message).digest('hex');
@@ -139,21 +140,16 @@ async function findByIdWithVerification(id) {
   const secret = process.env.AUDIT_HMAC_SECRET;
   if (!secret) return { ...row, isTampered: true };
 
-  const createdAt = row.created_at instanceof Date
-    ? row.created_at.toISOString()
-    : new Date(row.created_at).toISOString();
-
-  const message =
-    String(row.id) +
-    String(row.user_id ?? '') +
-    String(row.aksi ?? '') +
-    String(row.modul ?? '') +
-    String(row.object_id ?? '') +
-    JSON.stringify(row.data_sebelum ?? null) +
-    JSON.stringify(row.data_sesudah ?? null) +
-    createdAt;
-
-  const expected = crypto.createHmac('sha256', secret).update(message).digest('hex');
+  const expected = computeHmac({
+    id: row.id,
+    userId: row.user_id,
+    aksi: row.aksi,
+    modul: row.modul,
+    objectId: row.object_id,
+    dataSebelum: row.data_sebelum ?? null,
+    dataSesudah: row.data_sesudah ?? null,
+    createdAt: row.created_at,
+  });
 
   return {
     ...row,
@@ -163,6 +159,7 @@ async function findByIdWithVerification(id) {
 
 module.exports = {
   computeHmac,
+  stableStringify,
   recordAuditLog,
   findAll,
   findById,

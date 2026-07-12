@@ -10,7 +10,8 @@
     "start": "node src/server.js",
     "migrate": "node src/database/migrate-cli.js",
     "migrate:reset": "node src/database/migrate-cli.js --reset",
-    "seed:users": "node src/database/seeds/seed-users.js"
+    "seed:users": "node src/database/seeds/seed-users.js",
+    "seed:history": "node src/database/seeds/history/index.js"
   },
   "keywords": [],
   "author": "",
