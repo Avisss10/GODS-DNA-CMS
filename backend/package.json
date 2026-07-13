@@ -11,7 +11,8 @@
     "migrate": "node src/database/migrate-cli.js",
     "migrate:reset": "node src/database/migrate-cli.js --reset",
     "seed:users": "node src/database/seeds/seed-users.js",
-    "seed:history": "node src/database/seeds/history/index.js"
+    "seed:history": "node src/database/seeds/history/index.js",
+    "evidence": "node evidence/run-all.js"
   },
   "keywords": [],
   "author": "",
