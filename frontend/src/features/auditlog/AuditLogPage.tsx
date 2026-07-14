@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ScrollText, Search } from 'lucide-react';
+import { AlertTriangle, Loader2, ScrollText, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import Pagination from '@/components/Pagination';
 import { useSort, type SortExtractors } from '@/hooks/useSort';
 import { listAuditLogs, type AuditLogFilterParams, type AuditLogItem } from './auditlog.api';
 import { AKSI_OPTIONS, MODUL_OPTIONS } from './auditlog.constants';
@@ -24,6 +25,10 @@ const EMPTY_FILTERS: AuditLogFilterParams = {
   modul: '', aksi: '', userId: '', objectId: '', startDate: '', endDate: '',
 };
 
+const PAGE_SIZE = 20;
+const FETCH_LIMIT = 500;
+const AUTO_REFRESH_MS = 30_000;
+
 const AUDIT_LOG_SORT_EXTRACTORS: SortExtractors<AuditLogItem> = {
   modul: (r) => r.modul,
   aksi: (r) => r.aksi,
@@ -33,15 +38,25 @@ const AUDIT_LOG_SORT_EXTRACTORS: SortExtractors<AuditLogItem> = {
 export default function AuditLogPage() {
   const [filters, setFilters] = useState<AuditLogFilterParams>(EMPTY_FILTERS);
   const [selectedItem, setSelectedItem] = useState<AuditLogItem | null>(null);
+  const [page, setPage] = useState(1);
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isFetching, isError } = useQuery({
     queryKey: ['audit-logs', 'list', filters],
-    queryFn: () => listAuditLogs(filters),
+    queryFn: () => listAuditLogs({ ...filters, limit: FETCH_LIMIT }),
+    refetchInterval: AUTO_REFRESH_MS,
   });
+
+  useEffect(() => {
+    setPage(1);
+  }, [filters]);
 
   const items = data ?? [];
   const { sorted: sortedItems, handleSort, directionFor } = useSort(items, AUDIT_LOG_SORT_EXTRACTORS);
   const hasActiveFilter = Object.values(filters).some((v) => v);
+  const isPossiblyTruncated = !isLoading && items.length === FETCH_LIMIT;
+
+  const totalPages = Math.max(1, Math.ceil(sortedItems.length / PAGE_SIZE));
+  const paginated = sortedItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function updateFilter<K extends keyof AuditLogFilterParams>(key: K, value: AuditLogFilterParams[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -53,6 +68,9 @@ export default function AuditLogPage() {
         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-800">
           <ScrollText className="h-5 w-5 text-modul-auditlog" />
           Audit Log
+          {isFetching && !isLoading && (
+            <Loader2 className="h-4 w-4 animate-spin text-slate-400" aria-label="Memperbarui..." />
+          )}
         </h1>
         <p className="text-sm text-slate-500">Riwayat aktivitas seluruh modul, terverifikasi HMAC</p>
       </div>
@@ -87,6 +105,13 @@ export default function AuditLogPage() {
       {isError && (
         <p className="rounded-card border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
           Gagal memuat audit log. Silakan muat ulang halaman.
+        </p>
+      )}
+
+      {isPossiblyTruncated && (
+        <p className="rounded-card border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+          Menampilkan {FETCH_LIMIT} log terbaru — kemungkinan masih ada log lain yang belum termuat.
+          Gunakan filter (modul/aksi/tanggal) untuk mempersempit hasil.
         </p>
       )}
 
@@ -144,13 +169,13 @@ export default function AuditLogPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedItems.map((row, i) => (
+                {paginated.map((row, i) => (
                   <TableRow
                     key={row.id}
                     onClick={() => setSelectedItem(row)}
                     className="cursor-pointer"
                   >
-                    <TableCell className="text-slate-500">{i + 1}</TableCell>
+                    <TableCell className="text-slate-500">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
                     <TableCell className="text-slate-500">{row.id}</TableCell>
                     <TableCell className="font-medium text-slate-800">{row.modul}</TableCell>
                     <TableCell className="text-slate-600">{row.aksi}</TableCell>
@@ -172,7 +197,7 @@ export default function AuditLogPage() {
 
           {/* Mobile: card-list, tetap bisa diklik untuk buka diff modal */}
           <div className="space-y-2 sm:hidden">
-            {sortedItems.map((row) => (
+            {paginated.map((row) => (
               <button
                 key={row.id}
                 type="button"
@@ -200,6 +225,14 @@ export default function AuditLogPage() {
               </button>
             ))}
           </div>
+
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            itemLabel="log"
+            totalItems={sortedItems.length}
+          />
         </>
       )}
 

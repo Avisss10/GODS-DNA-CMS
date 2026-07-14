@@ -22,6 +22,8 @@ export interface AuditLogFilterParams {
   objectId?: string;
   startDate?: string;
   endDate?: string;
+  limit?: number;
+  offset?: number;
 }
 
 // Buang key kosong/undefined supaya query string bersih —
